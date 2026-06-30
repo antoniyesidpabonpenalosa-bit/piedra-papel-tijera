@@ -471,8 +471,17 @@ function ChoiceButton({ ruleset, id, disabled, onClick }) {
   );
 }
 
-function ChoiceGrid({ ruleset, disabled, onChoice }) {
-  const list = ids(ruleset);
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function ChoiceGrid({ ruleset, disabled, onChoice, order }) {
+  const list = order && order.length === ruleset.elements.length ? order : ids(ruleset);
   const cols = Math.min(list.length, list.length <= 4 ? list.length : 3);
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols},1fr)`, gap: 12, marginBottom: 22 }}>
@@ -480,6 +489,28 @@ function ChoiceGrid({ ruleset, disabled, onChoice }) {
         <ChoiceButton key={id} ruleset={ruleset} id={id} disabled={disabled} onClick={() => onChoice(id)} />
       ))}
     </div>
+  );
+}
+
+// Overlay de confirmación de turno (pasar-y-jugar): el siguiente jugador pulsa
+// "Listo" para empezar su turno, evitando que el anterior vea su jugada.
+function ConfirmTurnOverlay({ playerName, colorIndex, onReady }) {
+  return (
+    <Overlay>
+      <div style={{ textAlign: 'center', color: 'white', fontWeight: 700, marginBottom: 36 }}>
+        <div style={{ fontSize: 50, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontSize: 18, color: '#aaa', marginBottom: 8 }}>Pásale el dispositivo a</div>
+        <div style={{ fontSize: 44, background: PLAYER_COLORS[colorIndex % 4], WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          {playerName}
+        </div>
+      </div>
+      <GradBtn onClick={onReady} gradient={PLAYER_COLORS[colorIndex % 4]} shadow="rgba(0,0,0,.4)" style={{ maxWidth: 320 }}>
+        ✅ Listo, soy {playerName}
+      </GradBtn>
+      <div style={{ color: '#666', fontSize: 12, marginTop: 16, textAlign: 'center', maxWidth: 300 }}>
+        Las fichas cambian de posición cada turno 🔀
+      </div>
+    </Overlay>
   );
 }
 
@@ -510,10 +541,12 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
   const [showBattle, setShowBattle] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [multiChoices, setMultiChoices] = useState({});
-  const [showVs, setShowVs] = useState(false);
+  // Multijugador: 'confirm' = esperando que el jugador pulse "Listo"; 'choosing' = eligiendo
+  const [turnPhase, setTurnPhase] = useState(mode === 'multi' ? 'confirm' : 'choosing');
   const [waitingForChoices, setWaitingForChoices] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [roundWinner, setRoundWinner] = useState(null);
+  const [buttonOrder, setButtonOrder] = useState(() => shuffle(ids(ruleset)));
   const [particles, burstParticles] = useParticles();
 
   const currentPlayer = players[currentPlayerIndex];
@@ -556,12 +589,19 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
       setPlayerScores({ ...playerScores, [pName]: newPScore });
       setCpuScore(newCPUScore);
       setResult(text); setResultColor(color);
-      setTimeout(() => setShowBattle(false), 1400);
+      setTimeout(() => { setShowBattle(false); setButtonOrder(shuffle(ids(ruleset))); }, 1400);
     }, 900);
   }
 
+  // El jugador pulsa "Listo" en el overlay → ve sus fichas (rebarajadas)
+  function confirmTurn() {
+    if (soundEnabled) playClick();
+    setButtonOrder(shuffle(ids(ruleset)));
+    setTurnPhase('choosing');
+  }
+
   function playMulti(choice) {
-    if (gameOver || waitingForChoices) return;
+    if (gameOver || waitingForChoices || turnPhase !== 'choosing') return;
     if (soundEnabled) playClick();
     const pName = currentPlayer;
     const newChoices = { ...multiChoices, [pName]: choice };
@@ -570,12 +610,11 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
 
     if (currentPlayerIndex === players.length - 1) {
       setWaitingForChoices(true);
-      setShowVs(true);
-      setTimeout(() => processMultiRound(newChoices), 1200);
+      setTurnPhase('confirm');
+      setTimeout(() => processMultiRound(newChoices), 1000);
     } else {
       setCurrentPlayerIndex(i => i + 1);
-      setShowVs(true);
-      setTimeout(() => setShowVs(false), 1200);
+      setTurnPhase('confirm');
     }
   }
 
@@ -613,36 +652,31 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
     setShowResults(true);
 
     setTimeout(() => {
-      setShowResults(false); setShowVs(false); setWaitingForChoices(false);
+      setShowResults(false); setWaitingForChoices(false);
       setMultiChoices({}); setCurrentPlayerIndex(0); setRoundWinner(null);
+      setTurnPhase('confirm');
     }, 2800);
   }
 
   const handleChoice = mode === 'cpu' ? playVsCPU : playMulti;
-  const isDisabled = gameOver || (mode === 'cpu' && showBattle) || (mode === 'multi' && waitingForChoices);
+  const isDisabled = gameOver || (mode === 'cpu' && showBattle) || (mode === 'multi' && (waitingForChoices || turnPhase !== 'choosing'));
 
   return (
     <div style={{ ...BG_STYLE, padding: '20px 12px', position: 'relative', overflow: 'hidden' }}>
       <style>{CSS}</style>
       <Particles particles={particles} />
 
-      {showVs && !showResults && mode === 'multi' && (
+      {mode === 'multi' && waitingForChoices && !showResults && (
         <Overlay>
-          {waitingForChoices ? (
-            <div style={{ textAlign: 'center', color: 'white', fontSize: 28, fontWeight: 700 }}>
-              <div style={{ fontSize: 50, marginBottom: 16 }}>⏳</div>
-              Procesando ronda...
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', color: 'white', fontWeight: 700 }}>
-              <div style={{ fontSize: 44, marginBottom: 10, color: '#ffd700' }}>🎮</div>
-              <div style={{ fontSize: 20, color: '#aaa', marginBottom: 8 }}>Turno de</div>
-              <div style={{ fontSize: 40, background: PLAYER_COLORS[currentPlayerIndex % 4], WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                {currentPlayer}
-              </div>
-            </div>
-          )}
+          <div style={{ textAlign: 'center', color: 'white', fontSize: 28, fontWeight: 700 }}>
+            <div style={{ fontSize: 50, marginBottom: 16 }}>⏳</div>
+            Procesando ronda...
+          </div>
         </Overlay>
+      )}
+
+      {mode === 'multi' && turnPhase === 'confirm' && !waitingForChoices && !showResults && !gameOver && (
+        <ConfirmTurnOverlay playerName={currentPlayer} colorIndex={currentPlayerIndex} onReady={confirmTurn} />
       )}
 
       {showResults && mode === 'multi' && (
@@ -732,7 +766,7 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
           </div>
         )}
 
-        <ChoiceGrid ruleset={ruleset} disabled={isDisabled} onChoice={handleChoice} />
+        <ChoiceGrid ruleset={ruleset} disabled={isDisabled} onChoice={handleChoice} order={buttonOrder} />
 
         <div style={{
           textAlign: 'center', padding: '20px 16px', background: 'rgba(0,0,0,.25)', borderRadius: 16, marginBottom: 22,
@@ -909,24 +943,31 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
   const [scores, setScores] = useState({ [players[0]]: 0, [players[1]]: 0 });
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [choices, setChoices] = useState({});
-  const [showVs, setShowVs] = useState(false);
+  const [turnPhase, setTurnPhase] = useState('confirm');
   const [showResults, setShowResults] = useState(false);
   const [roundWinner, setRoundWinner] = useState(null);
   const [result, setResult] = useState('');
   const [resultColor, setResultColor] = useState('#ffd700');
   const [done, setDone] = useState(false);
+  const [buttonOrder, setButtonOrder] = useState(() => shuffle(ids(ruleset)));
   const [particles, burstParticles] = useParticles();
 
   const currentPlayer = players[currentPlayerIndex];
 
+  function confirmTurn() {
+    if (soundEnabled) playClick();
+    setButtonOrder(shuffle(ids(ruleset)));
+    setTurnPhase('choosing');
+  }
+
   function pickChoice(choice) {
-    if (done) return;
+    if (done || turnPhase !== 'choosing') return;
     if (soundEnabled) playClick();
     const newChoices = { ...choices, [currentPlayer]: choice };
     setChoices(newChoices);
     if (currentPlayerIndex === 0) {
-      setCurrentPlayerIndex(1); setShowVs(true);
-      setTimeout(() => setShowVs(false), 1100);
+      setCurrentPlayerIndex(1);
+      setTurnPhase('confirm');
     } else {
       resolveRound(newChoices);
     }
@@ -953,7 +994,7 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
       }
     }
     setScores(newScores); setRoundWinner(rWinner); setResult(text); setResultColor(color); setShowResults(true);
-    setTimeout(() => { setShowResults(false); setChoices({}); setCurrentPlayerIndex(0); setRoundWinner(null); }, 2500);
+    setTimeout(() => { setShowResults(false); setChoices({}); setCurrentPlayerIndex(0); setRoundWinner(null); setTurnPhase('confirm'); }, 2500);
   }
 
   return (
@@ -961,14 +1002,8 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
       <style>{CSS}</style>
       <Particles particles={particles} />
 
-      {showVs && !showResults && (
-        <Overlay>
-          <div style={{ textAlign: 'center', color: 'white', fontWeight: 700 }}>
-            <div style={{ fontSize: 44, marginBottom: 10, color: '#ffd700' }}>🎮</div>
-            <div style={{ fontSize: 20, color: '#aaa', marginBottom: 8 }}>Turno de</div>
-            <div style={{ fontSize: 40, background: PLAYER_COLORS[1], WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{players[1]}</div>
-          </div>
-        </Overlay>
+      {turnPhase === 'confirm' && !showResults && !done && (
+        <ConfirmTurnOverlay playerName={currentPlayer} colorIndex={currentPlayerIndex} onReady={confirmTurn} />
       )}
 
       {showResults && (
@@ -998,13 +1033,13 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
         <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
           {players.map((p, i) => (
             <ScoreCard key={p} title={p} emoji="" score={scores[p] || 0} color={PLAYER_COLORS[i]}
-              highlight={p === currentPlayer && !showVs && !showResults && !done} />
+              highlight={p === currentPlayer && turnPhase === 'choosing' && !showResults && !done} />
           ))}
         </div>
         <div style={{ color: '#888', textAlign: 'center', fontSize: 12, marginBottom: 16 }}>
           Meta: {goal} pts · Turno de <strong style={{ color: PLAYER_SOLIDS[currentPlayerIndex] }}>{currentPlayer}</strong>
         </div>
-        <ChoiceGrid ruleset={ruleset} disabled={done || showVs || showResults} onChoice={pickChoice} />
+        <ChoiceGrid ruleset={ruleset} disabled={done || turnPhase !== 'choosing' || showResults} onChoice={pickChoice} order={buttonOrder} />
         {result && !showResults && (
           <div style={{ textAlign: 'center', color: resultColor, fontSize: 16, fontWeight: 700, marginBottom: 12 }}>{result}</div>
         )}
