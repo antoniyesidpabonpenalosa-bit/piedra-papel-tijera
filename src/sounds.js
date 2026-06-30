@@ -52,3 +52,13 @@ export function playVictory() {
 export function playCountdown() {
   try { tone(880, 0.1, 0.2, 'square'); } catch {}
 }
+
+// Pitido final de la cuenta regresiva ("¡ya!")
+export function playGo() {
+  try { tone(1320, 0.18, 0.28, 'square'); } catch {}
+}
+
+// Vibración háptica en móvil (ignorada en desktop / sin soporte)
+export function vibrate(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
+}

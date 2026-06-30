@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { RotateCcw, Trophy, Zap, Target, Users, Cpu, Volume2, VolumeX, Settings, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
-import { playClick, playWin, playLose, playTie, playVictory } from './sounds.js';
+import { RotateCcw, Trophy, Zap, Target, Users, Cpu, Volume2, VolumeX, Settings, Plus, Trash2, ChevronUp, ChevronDown, Gamepad2, Sparkles } from 'lucide-react';
+import { playClick, playWin, playLose, playTie, playVictory, playCountdown, playGo, vibrate } from './sounds.js';
 import {
   DEFAULT_RULESET, RPSLS_RULESET, ELEMENT_STYLES,
   loadRuleset, saveRuleset,
@@ -30,6 +30,19 @@ const CSS = `
   @keyframes slideIn { from{transform:scale(0) rotate(-180deg);opacity:0} to{transform:scale(1) rotate(0);opacity:1} }
   @keyframes fadeIn { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
   @keyframes bounceIn { 0%{transform:scale(0)} 60%{transform:scale(1.12)} 100%{transform:scale(1)} }
+  @keyframes countPop { 0%{transform:scale(2.4);opacity:0} 35%{transform:scale(1);opacity:1} 100%{transform:scale(.6);opacity:0} }
+
+  /* ── Tema RETRO 8-bit (se activa con la clase .retro en un contenedor padre) ── */
+  .retro * { font-family: 'Press Start 2P', 'Courier New', monospace !important; letter-spacing: 0 !important; }
+  .retro div { border-radius: 0 !important; }
+  .retro h1 { background: none !important; -webkit-text-fill-color: #ffe66d !important; color: #ffe66d !important;
+    font-size: 16px !important; line-height: 1.7 !important; text-shadow: 3px 3px 0 #000 !important; animation: none !important; }
+  .retro h2 { background: none !important; -webkit-text-fill-color: #fff !important; color: #fff !important;
+    font-size: 14px !important; line-height: 1.6 !important; text-shadow: 2px 2px 0 #000 !important; }
+  .retro button { border-radius: 0 !important; border: 3px solid #000 !important;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.85) !important; font-size: 11px !important; transform: none !important; }
+  .retro input { border-radius: 0 !important; border: 3px solid #000 !important; font-size: 12px !important; }
+  .retro p, .retro span, .retro label { text-shadow: 1px 1px 0 #000; }
 `;
 
 const BG_STYLE = {
@@ -67,6 +80,46 @@ function useParticles() {
   return [particles, burst];
 }
 
+// ── Countdown 3·2·1 ───────────────────────────────────────────────────────────
+
+function useCountdown() {
+  const [count, setCount] = useState(0); // 0 = inactivo
+  const run = useCallback((onDone, soundOn) => {
+    let n = 3;
+    setCount(3);
+    if (soundOn) playCountdown();
+    const id = setInterval(() => {
+      n -= 1;
+      if (n <= 0) {
+        clearInterval(id);
+        setCount(0);
+        if (soundOn) playGo();
+        onDone();
+      } else {
+        setCount(n);
+        if (soundOn) playCountdown();
+      }
+    }, 700);
+  }, []);
+  return [count, run];
+}
+
+function CountdownOverlay({ count }) {
+  if (!count) return null;
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.9)', zIndex: 1500,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div key={count} style={{
+        fontSize: 160, fontWeight: 900, color: '#ffd700',
+        textShadow: '0 0 40px #ffd700, 4px 4px 0 #000',
+        animation: 'countPop .7s ease-out',
+      }}>{count}</div>
+    </div>
+  );
+}
+
 // ── Generic Button ───────────────────────────────────────────────────────────
 
 function GradBtn({ onClick, gradient = 'linear-gradient(135deg,#667eea,#764ba2)', shadow = 'rgba(102,126,234,.4)', children, disabled, style = {} }) {
@@ -95,7 +148,7 @@ function GradBtn({ onClick, gradient = 'linear-gradient(135deg,#667eea,#764ba2)'
 
 // ── SCREEN: Menu ─────────────────────────────────────────────────────────────
 
-function MenuScreen({ onSelect, onEditRules, ruleset, soundEnabled, toggleSound }) {
+function MenuScreen({ onSelect, onEditRules, ruleset, soundEnabled, toggleSound, theme, toggleTheme }) {
   return (
     <div style={{ ...BG_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <style>{CSS}</style>
@@ -104,7 +157,15 @@ function MenuScreen({ onSelect, onEditRules, ruleset, soundEnabled, toggleSound 
         background: 'rgba(20,20,40,.96)', borderRadius: 28, padding: '44px 40px',
         boxShadow: '0 20px 60px rgba(0,0,0,.65)', border: '2px solid rgba(255,255,255,.1)',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+          <button onClick={toggleTheme} title="Cambiar estilo" style={{
+            background: theme === 'retro' ? 'linear-gradient(135deg,#2af598,#009efd)' : 'rgba(255,255,255,.1)',
+            border: '1px solid rgba(255,255,255,.2)', borderRadius: 10, padding: '8px 12px',
+            color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700,
+          }}>
+            {theme === 'retro' ? <Gamepad2 size={18} /> : <Sparkles size={18} />}
+            {theme === 'retro' ? '8-BIT' : 'NEÓN'}
+          </button>
           <button onClick={toggleSound} title="Sonido" style={{
             background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.2)',
             borderRadius: 10, padding: '8px 12px', color: 'white', cursor: 'pointer', lineHeight: 0,
@@ -528,7 +589,7 @@ function Overlay({ children }) {
 
 // ── SCREEN: Game (vs CPU + Multiplayer) ──────────────────────────────────────
 
-function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, soundEnabled }) {
+function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, onRematch, soundEnabled }) {
   const [playerScores, setPlayerScores] = useState(() => Object.fromEntries(players.map(p => [p, 0])));
   const [cpuScore, setCpuScore] = useState(0);
   const [history, setHistory] = useState(() => Object.fromEntries(players.map(p => [p, emptyCounts(ruleset)])));
@@ -548,6 +609,7 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
   const [roundWinner, setRoundWinner] = useState(null);
   const [buttonOrder, setButtonOrder] = useState(() => shuffle(ids(ruleset)));
   const [particles, burstParticles] = useParticles();
+  const [count, runCountdown] = useCountdown();
 
   const currentPlayer = players[currentPlayerIndex];
 
@@ -559,7 +621,7 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
     setShowBattle(true);
     setCpuChoice(null);
 
-    setTimeout(() => {
+    runCountdown(() => {
       const cpu = cpuChoose(ruleset, history[pName], roundsPlayed);
       setCpuChoice(cpu);
       const newHistory = { ...history, [pName]: { ...history[pName], [choice]: (history[pName][choice] || 0) + 1 } };
@@ -577,11 +639,13 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
       } else if (winner === 'p1') {
         text = '¡Ganaste esta ronda! 🏆'; color = '#00ff88'; newPScore++;
         if (soundEnabled) playWin();
+        vibrate(60);
         burstParticles(true);
-        if (newPScore >= goal) { text = `🎉 ¡${pName} GANÓ LA PARTIDA! 🎉`; setGameOver(true); if (soundEnabled) playVictory(); }
+        if (newPScore >= goal) { text = `🎉 ¡${pName} GANÓ LA PARTIDA! 🎉`; setGameOver(true); if (soundEnabled) playVictory(); vibrate([80, 40, 80, 40, 160]); }
       } else {
         text = 'CPU ganó esta ronda 💀'; color = '#ff4444'; newCPUScore++;
         if (soundEnabled) playLose();
+        vibrate([40, 40, 40]);
         burstParticles(false);
         if (newCPUScore >= goal) { text = '💀 LA CPU GANÓ LA PARTIDA 💀'; setGameOver(true); }
       }
@@ -590,7 +654,7 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
       setCpuScore(newCPUScore);
       setResult(text); setResultColor(color);
       setTimeout(() => { setShowBattle(false); setButtonOrder(shuffle(ids(ruleset))); }, 1400);
-    }, 900);
+    }, soundEnabled);
   }
 
   // El jugador pulsa "Listo" en el overlay → ve sus fichas (rebarajadas)
@@ -611,7 +675,7 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
     if (currentPlayerIndex === players.length - 1) {
       setWaitingForChoices(true);
       setTurnPhase('confirm');
-      setTimeout(() => processMultiRound(newChoices), 1000);
+      runCountdown(() => processMultiRound(newChoices), soundEnabled);
     } else {
       setCurrentPlayerIndex(i => i + 1);
       setTurnPhase('confirm');
@@ -634,10 +698,10 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
         newScores[rWinner] = (newScores[rWinner] || 0) + 1;
         if (newScores[rWinner] >= goal) {
           text = `🎉 ¡${rWinner} GANÓ LA PARTIDA! 🎉`; color = '#00ff88'; setGameOver(true);
-          if (soundEnabled) playVictory();
+          if (soundEnabled) playVictory(); vibrate([80, 40, 80, 40, 160]);
         } else {
           text = `¡${rWinner} ganó la ronda! 🏆`; color = '#00ff88';
-          if (soundEnabled) playWin();
+          if (soundEnabled) playWin(); vibrate(60);
         }
         burstParticles(true);
       } else {
@@ -665,8 +729,9 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
     <div style={{ ...BG_STYLE, padding: '20px 12px', position: 'relative', overflow: 'hidden' }}>
       <style>{CSS}</style>
       <Particles particles={particles} />
+      <CountdownOverlay count={count} />
 
-      {mode === 'multi' && waitingForChoices && !showResults && (
+      {mode === 'multi' && waitingForChoices && !showResults && !count && (
         <Overlay>
           <div style={{ textAlign: 'center', color: 'white', fontSize: 28, fontWeight: 700 }}>
             <div style={{ fontSize: 50, marginBottom: 16 }}>⏳</div>
@@ -793,13 +858,22 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {gameOver && (
+            <button onClick={() => { playClick(); onRematch(); }} style={{
+              background: 'linear-gradient(135deg,#2af598,#009efd)', border: 'none', borderRadius: 14,
+              padding: '14px 32px', color: 'white', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 8px 25px rgba(42,245,152,.4)',
+            }}>
+              <RotateCcw size={20} />Revancha
+            </button>
+          )}
           <button onClick={() => { playClick(); onReset(); }} style={{
             background: 'linear-gradient(135deg,#f5576c,#f093fb)', border: 'none', borderRadius: 14,
-            padding: '14px 36px', color: 'white', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+            padding: '14px 32px', color: 'white', fontSize: 15, fontWeight: 700, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 8px 25px rgba(245,87,108,.4)',
           }}>
-            <RotateCcw size={20} />{gameOver ? 'Nueva Partida' : 'Cambiar Modo'}
+            {gameOver ? '🏠 Menú' : <><RotateCcw size={20} />Cambiar Modo</>}
           </button>
         </div>
       </div>
@@ -809,7 +883,7 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, sound
 
 // ── SCREEN: Tournament ────────────────────────────────────────────────────────
 
-function TournamentScreen({ players, ruleset, onReset, soundEnabled }) {
+function TournamentScreen({ players, ruleset, onReset, onRematch, soundEnabled }) {
   const [bracket, setBracket] = useState({
     semi1: { p1: players[0], p2: players[1], winner: null },
     semi2: { p1: players[2], p2: players[3], winner: null },
@@ -854,10 +928,16 @@ function TournamentScreen({ players, ruleset, onReset, soundEnabled }) {
             background: 'linear-gradient(45deg,#ffd700,#ff8c00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             fontSize: 44, fontWeight: 900, marginBottom: 28, animation: 'pulse 1.5s infinite',
           }}>{champion}</h1>
-          <button onClick={() => { playClick(); onReset(); }} style={{
-            background: 'linear-gradient(135deg,#667eea,#764ba2)', border: 'none', borderRadius: 14,
-            padding: '14px 36px', color: 'white', fontSize: 16, fontWeight: 700, cursor: 'pointer',
-          }}>🏠 Menú Principal</button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => { playClick(); onRematch(); }} style={{
+              background: 'linear-gradient(135deg,#2af598,#009efd)', border: 'none', borderRadius: 14,
+              padding: '14px 28px', color: 'white', fontSize: 16, fontWeight: 700, cursor: 'pointer',
+            }}>🔄 Revancha</button>
+            <button onClick={() => { playClick(); onReset(); }} style={{
+              background: 'linear-gradient(135deg,#667eea,#764ba2)', border: 'none', borderRadius: 14,
+              padding: '14px 28px', color: 'white', fontSize: 16, fontWeight: 700, cursor: 'pointer',
+            }}>🏠 Menú</button>
+          </div>
         </div>
       </div>
     );
@@ -951,6 +1031,7 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
   const [done, setDone] = useState(false);
   const [buttonOrder, setButtonOrder] = useState(() => shuffle(ids(ruleset)));
   const [particles, burstParticles] = useParticles();
+  const [count, runCountdown] = useCountdown();
 
   const currentPlayer = players[currentPlayerIndex];
 
@@ -969,7 +1050,8 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
       setCurrentPlayerIndex(1);
       setTurnPhase('confirm');
     } else {
-      resolveRound(newChoices);
+      setTurnPhase('confirm');
+      runCountdown(() => resolveRound(newChoices), soundEnabled);
     }
   }
 
@@ -985,11 +1067,12 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
       newScores[rWinner]++;
       if (newScores[rWinner] >= goal) {
         text = `🎉 ¡${rWinner} avanza!`; color = '#00ff88'; setDone(true);
+        if (soundEnabled) playVictory(); vibrate([80, 40, 80, 40, 160]);
         burstParticles(true);
         setTimeout(() => onMatchEnd(matchKey, rWinner), 3000);
       } else {
         text = `¡${rWinner} ganó la ronda! 🏆`; color = '#00ff88';
-        if (soundEnabled) playWin();
+        if (soundEnabled) playWin(); vibrate(60);
         burstParticles(true);
       }
     }
@@ -1002,7 +1085,9 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
       <style>{CSS}</style>
       <Particles particles={particles} />
 
-      {turnPhase === 'confirm' && !showResults && !done && (
+      <CountdownOverlay count={count} />
+
+      {turnPhase === 'confirm' && !showResults && !done && !count && (
         <ConfirmTurnOverlay playerName={currentPlayer} colorIndex={currentPlayerIndex} onReady={confirmTurn} />
       )}
 
@@ -1057,8 +1142,12 @@ export default function App() {
   const [players, setPlayers] = useState([]);
   const [goal, setGoal] = useState(3);
   const [ruleset, setRuleset] = useState(() => loadRuleset());
+  const [gameInstance, setGameInstance] = useState(0); // cambia para forzar revancha (remonta)
   const [soundEnabled, setSoundEnabled] = useState(() => {
     try { return localStorage.getItem('ppt-sound') !== 'off'; } catch { return true; }
+  });
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('ppt-theme') === 'retro' ? 'retro' : 'modern'; } catch { return 'modern'; }
   });
 
   function toggleSound() {
@@ -1069,27 +1158,37 @@ export default function App() {
     });
   }
 
+  function toggleTheme() {
+    setTheme(t => {
+      const next = t === 'retro' ? 'modern' : 'retro';
+      try { localStorage.setItem('ppt-theme', next); } catch {}
+      return next;
+    });
+  }
+
   function handleModeSelect(selectedMode, n = 1) { setMode(selectedMode); setNumPlayers(n); setScreen('setup'); }
   function handleSetupStart(names) { setPlayers(names); setScreen(mode === 'tournament' ? 'tournament' : 'game'); }
   function handleReset() { setScreen('menu'); setMode(null); setPlayers([]); }
   function handleGoalChange(newGoal) { setGoal(newGoal); }
   function handleSaveRules(rs) { setRuleset(rs); saveRuleset(rs); setScreen('menu'); }
+  function handleRematch() { setGameInstance(n => n + 1); }
 
+  let content;
   if (screen === 'menu') {
-    return <MenuScreen onSelect={handleModeSelect} onEditRules={() => setScreen('rules')}
-      ruleset={ruleset} soundEnabled={soundEnabled} toggleSound={toggleSound} />;
+    content = <MenuScreen onSelect={handleModeSelect} onEditRules={() => setScreen('rules')}
+      ruleset={ruleset} soundEnabled={soundEnabled} toggleSound={toggleSound}
+      theme={theme} toggleTheme={toggleTheme} />;
+  } else if (screen === 'rules') {
+    content = <RulesEditor initial={ruleset} onSave={handleSaveRules} onCancel={() => setScreen('menu')} />;
+  } else if (screen === 'setup') {
+    content = <SetupScreen mode={mode} numPlayers={numPlayers} onStart={handleSetupStart} onBack={handleReset} />;
+  } else if (screen === 'tournament') {
+    content = <TournamentScreen key={gameInstance} players={players} ruleset={ruleset}
+      onReset={handleReset} onRematch={handleRematch} soundEnabled={soundEnabled} />;
+  } else {
+    content = <GameScreen key={gameInstance} mode={mode} players={players} goal={goal} ruleset={ruleset}
+      onGoalChange={handleGoalChange} onReset={handleReset} onRematch={handleRematch} soundEnabled={soundEnabled} />;
   }
-  if (screen === 'rules') {
-    return <RulesEditor initial={ruleset} onSave={handleSaveRules} onCancel={() => setScreen('menu')} />;
-  }
-  if (screen === 'setup') {
-    return <SetupScreen mode={mode} numPlayers={numPlayers} onStart={handleSetupStart} onBack={handleReset} />;
-  }
-  if (screen === 'tournament') {
-    return <TournamentScreen players={players} ruleset={ruleset} onReset={handleReset} soundEnabled={soundEnabled} />;
-  }
-  return (
-    <GameScreen mode={mode} players={players} goal={goal} ruleset={ruleset}
-      onGoalChange={handleGoalChange} onReset={handleReset} soundEnabled={soundEnabled} />
-  );
+
+  return <div className={theme === 'retro' ? 'retro' : undefined}>{content}</div>;
 }
