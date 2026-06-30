@@ -2,7 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Base path: en GitHub Pages el sitio vive en /piedra-papel-tijera/.
+// En desarrollo (npm run dev) usamos '/'.
+const base = process.env.NODE_ENV === 'production' ? '/piedra-papel-tijera/' : '/';
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -16,7 +21,8 @@ export default defineConfig({
         background_color: '#0f0c29',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        scope: base,
+        start_url: base,
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
         ],
