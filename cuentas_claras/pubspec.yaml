@@ -1,0 +1,32 @@
+name: cuentas_claras
+description: Terminal de Punto de Venta - Cuentas Claras
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  provider: ^6.1.1
+  intl: ^0.19.0
+  image_picker: ^1.0.7
+  mobile_scanner: ^3.5.6
+  path_provider: ^2.1.2
+  fl_chart: ^0.66.2
+  csv: ^6.0.0
+  share_plus: ^7.2.1
+  uuid: ^4.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
