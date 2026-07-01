@@ -8,6 +8,7 @@ import {
   determineWinner, winningChoice, cpuChoose,
 } from './ruleset.js';
 import { getStats, recordRound, recordGameWin, recordGameLoss, recordTournamentWin, checkAchievements, getAllAchievements, resetStats } from './stats.js';
+import { expertChoose, recordPlayerMove, resetBrain, brainStats } from './brain.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -19,8 +20,8 @@ const PLAYER_COLORS = [
 ];
 const PLAYER_SOLIDS = ['#667eea', '#f093fb', '#2af598', '#fa709a'];
 
-const DIFFICULTY_LABELS = { easy: 'Fácil', normal: 'Normal', hard: 'Difícil' };
-const DIFFICULTY_COLORS = { easy: '#2af598', normal: '#ffd700', hard: '#f5576c' };
+const DIFFICULTY_LABELS = { easy: 'Fácil', normal: 'Normal', hard: 'Difícil', expert: 'Experta 🧠' };
+const DIFFICULTY_COLORS = { easy: '#2af598', normal: '#ffd700', hard: '#f5576c', expert: '#c084fc' };
 
 const CSS = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -262,6 +263,7 @@ function GradBtn({ onClick, gradient = 'linear-gradient(135deg,#667eea,#764ba2)'
 function StatsScreen({ onBack }) {
   const stats = getStats();
   const achievements = getAllAchievements();
+  const [brainMoves, setBrainMoves] = useState(() => brainStats().totalMoves);
   const winRate = stats.roundsPlayed > 0 ? Math.round((stats.wins / stats.roundsPlayed) * 100) : 0;
 
   const statCards = [
@@ -325,6 +327,24 @@ function StatsScreen({ onBack }) {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Memoria de la IA experta */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          background: 'rgba(192,132,252,.06)', border: '1px solid rgba(192,132,252,.25)',
+          borderRadius: 12, padding: '12px 14px', marginBottom: 16,
+        }}>
+          <div>
+            <div style={{ color: '#c084fc', fontSize: 12, fontWeight: 700 }}>🧠 Memoria IA Experta</div>
+            <div style={{ color: '#777', fontSize: 11, marginTop: 2 }}>
+              Ha aprendido de <strong style={{ color: '#c084fc' }}>{brainMoves}</strong> jugadas tuyas
+            </div>
+          </div>
+          <button onClick={() => { playClick(); if (confirm('¿Borrar la memoria de la IA? Olvidará todos tus patrones.')) { resetBrain(); setBrainMoves(0); } }} style={{
+            background: 'rgba(192,132,252,.12)', border: '1px solid rgba(192,132,252,.3)',
+            borderRadius: 8, padding: '7px 12px', color: '#c084fc', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>Borrar memoria</button>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
@@ -848,8 +868,12 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, onRem
         ? ids(ruleset)[Math.floor(Math.random() * ids(ruleset).length)]
         : difficulty === 'hard'
           ? cpuChooseHard(ruleset, history[pName], roundsPlayed)
-          : cpuChoose(ruleset, history[pName], roundsPlayed);
+          : difficulty === 'expert'
+            ? expertChoose(ruleset)
+            : cpuChoose(ruleset, history[pName], roundsPlayed);
       setCpuChoice(cpu);
+      // La IA experta aprende del jugador DESPUÉS de haber elegido (sin trampa)
+      recordPlayerMove(choice);
       const newHistory = { ...history, [pName]: { ...history[pName], [choice]: (history[pName][choice] || 0) + 1 } };
       setHistory(newHistory);
       setRoundsPlayed(r => r + 1);
@@ -1431,8 +1455,8 @@ export default function App() {
   }
   function cycleDifficulty() {
     setDifficulty(d => {
-      const order = ['easy', 'normal', 'hard'];
-      const n = order[(order.indexOf(d) + 1) % 3];
+      const order = ['easy', 'normal', 'hard', 'expert'];
+      const n = order[(order.indexOf(d) + 1) % order.length];
       try { localStorage.setItem('ppt-difficulty', n); } catch {}
       return n;
     });
