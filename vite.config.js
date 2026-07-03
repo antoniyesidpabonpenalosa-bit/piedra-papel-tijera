@@ -8,11 +8,15 @@ const base = process.env.NODE_ENV === 'production' ? '/piedra-papel-tijera/' : '
 
 export default defineConfig({
   base,
+  test: {
+    environment: 'node',
+    setupFiles: ['./tests/setup.js'],
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Piedra Papel Tijera',
         short_name: 'PPT',
@@ -24,7 +28,9 @@ export default defineConfig({
         scope: base,
         start_url: base,
         icons: [
-          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {

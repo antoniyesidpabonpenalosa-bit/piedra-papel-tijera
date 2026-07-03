@@ -9,6 +9,7 @@ import {
 } from './ruleset.js';
 import { getStats, recordRound, recordGameWin, recordGameLoss, recordTournamentWin, checkAchievements, getAllAchievements, resetStats } from './stats.js';
 import { expertChoose, recordPlayerMove, resetBrain, brainStats } from './brain.js';
+import { getDailyMissions, missionEvent, getTotalCompleted, getAvatars } from './missions.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -119,7 +120,7 @@ function AchievementToast({ achievement, onDone }) {
     }}>
       <span style={{ fontSize: 28 }}>{achievement.emoji}</span>
       <div>
-        <div style={{ fontSize: 11, opacity: .7 }}>LOGRO DESBLOQUEADO</div>
+        <div style={{ fontSize: 11, opacity: .7 }}>{achievement.toastType || 'LOGRO DESBLOQUEADO'}</div>
         <div>{achievement.name}</div>
       </div>
     </div>
@@ -362,9 +363,138 @@ function StatsScreen({ onBack }) {
   );
 }
 
+// ── SCREEN: Missions ─────────────────────────────────────────────────────────
+
+function MissionsScreen({ onBack }) {
+  const missions = getDailyMissions();
+  const total = getTotalCompleted();
+  const avatars = getAvatars();
+  const nextUnlock = avatars.find(a => !a.unlocked);
+
+  return (
+    <div style={{ ...BG_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <style>{CSS}</style>
+      <div style={{ maxWidth: 480, width: '100%', ...CARD_STYLE, padding: '36px 28px' }}>
+        <h2 style={{
+          textAlign: 'center', fontSize: 24, fontWeight: 900, marginBottom: 4,
+          background: 'linear-gradient(45deg, #2af598, #009efd)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        }}>🎯 MISIONES DEL DÍA</h2>
+        <p style={{ textAlign: 'center', color: '#666', fontSize: 12, marginBottom: 24 }}>
+          Se renuevan cada día · Completadas de por vida: <strong style={{ color: '#2af598' }}>{total}</strong>
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+          {missions.map(m => {
+            const pct = Math.round((m.progress / m.target) * 100);
+            return (
+              <div key={m.id} style={{
+                background: m.completed ? 'rgba(42,245,152,.07)' : 'rgba(255,255,255,.03)',
+                border: m.completed ? '1px solid rgba(42,245,152,.35)' : '1px solid rgba(255,255,255,.08)',
+                borderRadius: 14, padding: '14px 16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 24 }}>{m.emoji}</span>
+                    <span style={{ color: m.completed ? '#2af598' : '#ddd', fontSize: 13, fontWeight: 700 }}>{m.name}</span>
+                  </div>
+                  <span style={{ color: m.completed ? '#2af598' : '#777', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {m.completed ? '✓ HECHA' : `${m.progress}/${m.target}`}
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,.06)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: `${pct}%`, borderRadius: 3,
+                    background: m.completed ? '#2af598' : 'linear-gradient(90deg, #667eea, #009efd)',
+                    boxShadow: m.completed ? '0 0 8px rgba(42,245,152,.5)' : 'none',
+                    transition: 'width .4s',
+                  }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Avatares */}
+        <div style={{ color: '#888', fontSize: 11, letterSpacing: 2, marginBottom: 10 }}>
+          🎭 AVATARES ({avatars.filter(a => a.unlocked).length}/{avatars.length})
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 12 }}>
+          {avatars.map(a => (
+            <div key={a.emoji} title={a.unlocked ? '' : `Completa ${a.unlock} misiones`} style={{
+              aspectRatio: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: a.unlocked ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.02)',
+              border: a.unlocked ? '1px solid rgba(42,245,152,.25)' : '1px solid rgba(255,255,255,.05)',
+              borderRadius: 10, fontSize: 24,
+              filter: a.unlocked ? 'none' : 'grayscale(1) brightness(.4)',
+            }}>
+              {a.emoji}
+              {!a.unlocked && <span style={{ fontSize: 8, color: '#666', marginTop: 2 }}>🔒{a.unlock}</span>}
+            </div>
+          ))}
+        </div>
+        {nextUnlock && (
+          <p style={{ color: '#666', fontSize: 11, textAlign: 'center', marginBottom: 18 }}>
+            Próximo avatar {nextUnlock.emoji} a las <strong style={{ color: '#2af598' }}>{nextUnlock.unlock}</strong> misiones
+          </p>
+        )}
+
+        <button onClick={() => { playClick(); onBack(); }} style={{
+          width: '100%', padding: 12, background: 'linear-gradient(135deg,#667eea,#764ba2)',
+          border: 'none', borderRadius: 12, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+        }}>← Volver</button>
+      </div>
+    </div>
+  );
+}
+
+// ── SCREEN: Help ─────────────────────────────────────────────────────────────
+
+function HelpScreen({ ruleset, onBack }) {
+  const n = ruleset.elements.length;
+  const k = Math.floor((n - 1) / 2);
+  return (
+    <div style={{ ...BG_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <style>{CSS}</style>
+      <div style={{ maxWidth: 480, width: '100%', ...CARD_STYLE, padding: '36px 28px' }}>
+        <h2 style={{
+          textAlign: 'center', fontSize: 24, fontWeight: 900, marginBottom: 20,
+          background: 'linear-gradient(45deg, #ffd700, #ff8c00)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        }}>❓ CÓMO JUGAR</h2>
+
+        {[
+          { emoji: '🎯', title: 'Objetivo', text: 'Llega primero a la meta de puntos (3, 5 o 10). Cada ronda ganada suma 1 punto.' },
+          { emoji: '⚔️', title: 'Reglas actuales', text: `Juegas con ${n} elementos: ${ruleset.elements.map(e => `${e.emoji} ${e.name}`).join(', ')}. Cada elemento le gana a los ${k} siguiente(s) en el orden circular.` },
+          { emoji: '🤖', title: 'VS CPU', text: 'Elige dificultad en el menú: Fácil (aleatoria), Normal, Difícil (predice tu jugada favorita) o Experta 🧠 (aprende tus patrones y los recuerda para siempre).' },
+          { emoji: '👥', title: 'Multijugador', text: 'De 2 a 4 jugadores en el mismo dispositivo. Pásalo por turnos: cada jugador confirma con "Listo" para que nadie vea las jugadas ajenas. Las fichas cambian de posición cada turno.' },
+          { emoji: '🏆', title: 'Torneo', text: '4 jugadores, bracket eliminatorio: 2 semifinales y una final. El primero a 3 puntos avanza.' },
+          { emoji: '🎯', title: 'Misiones diarias', text: 'Cada día hay 3 misiones nuevas. Complétalas para desbloquear avatares.' },
+          { emoji: '⏱️', title: 'Contrarreloj', text: 'Actívalo en el menú: tendrás 10 segundos por turno. Si no eliges, se juega al azar.' },
+          { emoji: '⚙️', title: 'Personaliza', text: 'Edita las reglas para crear tus propios elementos (3 a 7), cambia el tema visual (Neón/8-bit) y activa o silencia el sonido.' },
+        ].map(s => (
+          <div key={s.title} style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+            <span style={{ fontSize: 22, lineHeight: 1.3 }}>{s.emoji}</span>
+            <div>
+              <div style={{ color: '#ffd700', fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{s.title}</div>
+              <div style={{ color: '#999', fontSize: 12, lineHeight: 1.5 }}>{s.text}</div>
+            </div>
+          </div>
+        ))}
+
+        <button onClick={() => { playClick(); onBack(); }} style={{
+          width: '100%', padding: 12, marginTop: 8, background: 'linear-gradient(135deg,#667eea,#764ba2)',
+          border: 'none', borderRadius: 12, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+        }}>← Volver</button>
+      </div>
+    </div>
+  );
+}
+
 // ── SCREEN: Menu ─────────────────────────────────────────────────────────────
 
-function MenuScreen({ onSelect, onEditRules, onStats, ruleset, soundEnabled, toggleSound, theme, toggleTheme, timerEnabled, toggleTimer, difficulty, cycleDifficulty }) {
+function MenuScreen({ onSelect, onEditRules, onStats, onMissions, onHelp, ruleset, soundEnabled, toggleSound, theme, toggleTheme, timerEnabled, toggleTimer, difficulty, cycleDifficulty }) {
+  const dailyDone = getDailyMissions().filter(m => m.completed).length;
   return (
     <div style={{ ...BG_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <style>{CSS}</style>
@@ -375,12 +505,28 @@ function MenuScreen({ onSelect, onEditRules, onStats, ruleset, soundEnabled, tog
       <div style={{ maxWidth: 560, width: '100%', ...CARD_STYLE, padding: '40px 36px' }}>
         {/* Top bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <button onClick={onStats} title="Estadísticas" style={{
-            background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)',
-            borderRadius: 10, padding: '8px 12px', color: '#ffd700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700,
-          }}>
-            <BarChart3 size={16} /> Stats
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={onStats} title="Estadísticas" style={{
+              background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)',
+              borderRadius: 10, padding: '8px 12px', color: '#ffd700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700,
+            }}>
+              <BarChart3 size={16} /> Stats
+            </button>
+            <button onClick={onMissions} title="Misiones diarias" style={{
+              background: dailyDone === 3 ? 'rgba(42,245,152,.12)' : 'rgba(255,255,255,.06)',
+              border: `1px solid ${dailyDone === 3 ? 'rgba(42,245,152,.4)' : 'rgba(255,255,255,.12)'}`,
+              borderRadius: 10, padding: '8px 12px', color: '#2af598', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
+            }}>
+              🎯 {dailyDone}/3
+            </button>
+            <button onClick={onHelp} title="Cómo jugar" style={{
+              background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)',
+              borderRadius: 10, padding: '8px 12px', color: '#888', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+            }}>
+              ❓
+            </button>
+          </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={toggleTimer} title="Contrarreloj" style={{
               background: timerEnabled ? 'rgba(42,245,152,.15)' : 'rgba(255,255,255,.06)',
@@ -674,7 +820,13 @@ function SetupScreen({ mode, numPlayers, onStart, onBack }) {
   const [names, setNames] = useState(
     Array.from({ length: count }, (_, i) => `Jugador ${i + 1}`)
   );
+  const avatarList = getAvatars();
+  const unlockedAvatars = avatarList.filter(a => a.unlocked);
+  const [avatars, setAvatars] = useState(
+    Array.from({ length: count }, (_, i) => unlockedAvatars[i % unlockedAvatars.length]?.emoji || '😀')
+  );
   const setName = (i, v) => setNames(prev => prev.map((n, j) => j === i ? v : n));
+  const setAvatar = (i, v) => { playClick(); setAvatars(prev => prev.map((a, j) => j === i ? v : a)); };
 
   return (
     <div style={{ ...BG_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -694,6 +846,16 @@ function SetupScreen({ mode, numPlayers, onStart, onBack }) {
               width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.05)',
               border: `2px solid ${PLAYER_SOLIDS[i % 4]}44`, borderRadius: 10, color: 'white', fontSize: 16,
             }} />
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              {unlockedAvatars.map(a => (
+                <button key={a.emoji} onClick={() => setAvatar(i, a.emoji)} style={{
+                  width: 38, height: 38, fontSize: 20, cursor: 'pointer', borderRadius: 8,
+                  background: avatars[i] === a.emoji ? `${PLAYER_SOLIDS[i % 4]}33` : 'rgba(255,255,255,.03)',
+                  border: avatars[i] === a.emoji ? `2px solid ${PLAYER_SOLIDS[i % 4]}` : '2px solid transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                }}>{a.emoji}</button>
+              ))}
+            </div>
           </div>
         ))}
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
@@ -701,7 +863,7 @@ function SetupScreen({ mode, numPlayers, onStart, onBack }) {
             flex: 1, padding: 12, background: 'rgba(255,255,255,.06)',
             border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, color: '#888', fontSize: 14, cursor: 'pointer',
           }}>← Atrás</button>
-          <button onClick={() => { playClick(); onStart(names.map((n, i) => n.trim() || `Jugador ${i + 1}`)); }} style={{
+          <button onClick={() => { playClick(); onStart(names.map((n, i) => n.trim() || `Jugador ${i + 1}`), avatars); }} style={{
             flex: 2, padding: 12, background: 'linear-gradient(135deg,#667eea,#764ba2)',
             border: 'none', borderRadius: 12, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
             boxShadow: '0 8px 25px rgba(102,126,234,.4)',
@@ -809,7 +971,8 @@ function Overlay({ children }) {
 
 // ── SCREEN: Game ────────────────────────────────────────────────────────────
 
-function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, onRematch, soundEnabled, difficulty, timerEnabled }) {
+function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange, onReset, onRematch, soundEnabled, difficulty, timerEnabled }) {
+  const av = (p) => avatarMap[p] || '👤';
   const [playerScores, setPlayerScores] = useState(() => Object.fromEntries(players.map(p => [p, 0])));
   const [cpuScore, setCpuScore] = useState(0);
   const [history, setHistory] = useState(() => Object.fromEntries(players.map(p => [p, emptyCounts(ruleset)])));
@@ -883,18 +1046,26 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, onRem
       let newPScore = playerScores[pName];
       let newCPUScore = cpuScore;
 
+      const completedMissions = [];
+      completedMissions.push(...missionEvent('round_played'));
+
       if (winner === 'tie') {
         text = '¡Empate! 🤝'; color = '#ffcc00';
         if (soundEnabled) playTie();
         recordRound('tie', choice);
+        completedMissions.push(...missionEvent('round_tie'));
       } else if (winner === 'p1') {
         text = '¡Ganaste! 🏆'; color = '#00ff88'; newPScore++;
         if (soundEnabled) playWin(); vibrate(60); burstParticles(true);
-        recordRound('win', choice);
+        const st = recordRound('win', choice);
+        completedMissions.push(...missionEvent('round_win'));
+        completedMissions.push(...missionEvent('streak', st.streak));
+        if (difficulty === 'hard' || difficulty === 'expert') completedMissions.push(...missionEvent('hard_win'));
         if (newPScore >= goal) {
           text = `🎉 ¡${pName} GANÓ! 🎉`; setGameOver(true);
           if (soundEnabled) playVictory(); vibrate([80, 40, 80, 40, 160]);
           recordGameWin();
+          completedMissions.push(...missionEvent('game_win'));
         }
       } else {
         text = 'CPU ganó 💀'; color = '#ff4444'; newCPUScore++;
@@ -907,7 +1078,11 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, onRem
       }
 
       const newAch = checkAchievements();
-      if (newAch.length) showAchievement(newAch);
+      const toasts = [
+        ...newAch,
+        ...completedMissions.map(m => ({ ...m, toastType: '🎯 MISIÓN COMPLETADA' })),
+      ];
+      if (toasts.length) showAchievement(toasts);
 
       setPlayerScores({ ...playerScores, [pName]: newPScore });
       setCpuScore(newCPUScore);
@@ -1028,12 +1203,12 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, onRem
           <div style={{
             textAlign: 'center', padding: '10px 18px', background: PLAYER_COLORS[currentPlayerIndex % 4],
             borderRadius: 12, marginBottom: 14, color: 'white', fontSize: 16, fontWeight: 700,
-          }}>🎮 Turno: {currentPlayer}</div>
+          }}>🎮 Turno: {av(currentPlayer)} {currentPlayer}</div>
         )}
 
         {mode === 'cpu' && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
-            <ScoreCard title={players[0]} emoji="👤" score={playerScores[players[0]] || 0} color={PLAYER_COLORS[0]} />
+            <ScoreCard title={players[0]} emoji={av(players[0])} score={playerScores[players[0]] || 0} color={PLAYER_COLORS[0]} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 36 }}>
               <span style={{ background: 'linear-gradient(135deg,#f093fb,#f5576c)', borderRadius: 8, padding: '5px 8px', color: 'white', fontWeight: 700, fontSize: 13, boxShadow: '0 0 15px rgba(240,147,251,.3)' }}>VS</span>
             </div>
@@ -1044,7 +1219,7 @@ function GameScreen({ mode, players, goal, ruleset, onGoalChange, onReset, onRem
         {mode === 'multi' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 18 }}>
             {players.map((p, i) => (
-              <ScoreCard key={p} title={p} emoji="" score={playerScores[p] || 0} color={PLAYER_COLORS[i % 4]}
+              <ScoreCard key={p} title={p} emoji={av(p)} score={playerScores[p] || 0} color={PLAYER_COLORS[i % 4]}
                 highlight={p === currentPlayer && !waitingForChoices && !gameOver} hasChosen={!!multiChoices[p]} />
             ))}
           </div>
@@ -1158,7 +1333,7 @@ function cpuChooseHard(rs, playerHistory, roundsPlayed) {
 
 // ── SCREEN: Tournament ──────────────────────────────────────────────────────
 
-function TournamentScreen({ players, ruleset, onReset, onRematch, soundEnabled, timerEnabled }) {
+function TournamentScreen({ players, ruleset, avatarMap = {}, onReset, onRematch, soundEnabled, timerEnabled }) {
   const [bracket, setBracket] = useState({
     semi1: { p1: players[0], p2: players[1], winner: null },
     semi2: { p1: players[2], p2: players[3], winner: null },
@@ -1223,7 +1398,7 @@ function TournamentScreen({ players, ruleset, onReset, onRematch, soundEnabled, 
     const m = bracket[currentMatch];
     return (
       <TournamentMatch players={[m.p1, m.p2]} matchKey={currentMatch} goal={goal}
-        ruleset={ruleset} onMatchEnd={onMatchEnd} soundEnabled={soundEnabled} timerEnabled={timerEnabled} />
+        ruleset={ruleset} avatarMap={avatarMap} onMatchEnd={onMatchEnd} soundEnabled={soundEnabled} timerEnabled={timerEnabled} />
     );
   }
 
@@ -1293,7 +1468,8 @@ function MatchCard({ match, matchNum, onPlay, isFinal }) {
   );
 }
 
-function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEnabled, timerEnabled }) {
+function TournamentMatch({ players, matchKey, goal, ruleset, avatarMap = {}, onMatchEnd, soundEnabled, timerEnabled }) {
+  const av = (p) => avatarMap[p] || '';
   const [scores, setScores] = useState({ [players[0]]: 0, [players[1]]: 0 });
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [choices, setChoices] = useState({});
@@ -1404,7 +1580,7 @@ function TournamentMatch({ players, matchKey, goal, ruleset, onMatchEnd, soundEn
         <div style={{ color: '#ffd700', textAlign: 'center', fontSize: 12, letterSpacing: 2, marginBottom: 12 }}>🏆 TORNEO</div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
           {players.map((p, i) => (
-            <ScoreCard key={p} title={p} emoji="" score={scores[p] || 0} color={PLAYER_COLORS[i]}
+            <ScoreCard key={p} title={p} emoji={av(p)} score={scores[p] || 0} color={PLAYER_COLORS[i]}
               highlight={p === currentPlayer && turnPhase === 'choosing' && !showResults && !done} />
           ))}
         </div>
@@ -1428,6 +1604,7 @@ export default function App() {
   const [mode, setMode] = useState(null);
   const [numPlayers, setNumPlayers] = useState(1);
   const [players, setPlayers] = useState([]);
+  const [avatarMap, setAvatarMap] = useState({});
   const [goal, setGoal] = useState(3);
   const [ruleset, setRuleset] = useState(() => loadRuleset());
   const [gameInstance, setGameInstance] = useState(0);
@@ -1463,7 +1640,11 @@ export default function App() {
   }
 
   function handleModeSelect(selectedMode, n = 1) { setMode(selectedMode); setNumPlayers(n); setScreen('setup'); }
-  function handleSetupStart(names) { setPlayers(names); setScreen(mode === 'tournament' ? 'tournament' : 'game'); }
+  function handleSetupStart(names, avatarChoices = []) {
+    setPlayers(names);
+    setAvatarMap(Object.fromEntries(names.map((n, i) => [n, avatarChoices[i] || '😀'])));
+    setScreen(mode === 'tournament' ? 'tournament' : 'game');
+  }
   function handleReset() { setScreen('menu'); setMode(null); setPlayers([]); }
   function handleGoalChange(newGoal) { setGoal(newGoal); }
   function handleSaveRules(rs) { setRuleset(rs); saveRuleset(rs); setScreen('menu'); }
@@ -1472,7 +1653,7 @@ export default function App() {
   let content;
   if (screen === 'menu') {
     content = <MenuScreen onSelect={handleModeSelect} onEditRules={() => setScreen('rules')}
-      onStats={() => setScreen('stats')}
+      onStats={() => setScreen('stats')} onMissions={() => setScreen('missions')} onHelp={() => setScreen('help')}
       ruleset={ruleset} soundEnabled={soundEnabled} toggleSound={toggleSound}
       theme={theme} toggleTheme={toggleTheme}
       timerEnabled={timerEnabled} toggleTimer={toggleTimer}
@@ -1481,13 +1662,17 @@ export default function App() {
     content = <RulesEditor initial={ruleset} onSave={handleSaveRules} onCancel={() => setScreen('menu')} />;
   } else if (screen === 'stats') {
     content = <StatsScreen onBack={() => setScreen('menu')} />;
+  } else if (screen === 'missions') {
+    content = <MissionsScreen onBack={() => setScreen('menu')} />;
+  } else if (screen === 'help') {
+    content = <HelpScreen ruleset={ruleset} onBack={() => setScreen('menu')} />;
   } else if (screen === 'setup') {
     content = <SetupScreen mode={mode} numPlayers={numPlayers} onStart={handleSetupStart} onBack={handleReset} />;
   } else if (screen === 'tournament') {
-    content = <TournamentScreen key={gameInstance} players={players} ruleset={ruleset}
+    content = <TournamentScreen key={gameInstance} players={players} ruleset={ruleset} avatarMap={avatarMap}
       onReset={handleReset} onRematch={handleRematch} soundEnabled={soundEnabled} timerEnabled={timerEnabled} />;
   } else {
-    content = <GameScreen key={gameInstance} mode={mode} players={players} goal={goal} ruleset={ruleset}
+    content = <GameScreen key={gameInstance} mode={mode} players={players} goal={goal} ruleset={ruleset} avatarMap={avatarMap}
       onGoalChange={handleGoalChange} onReset={handleReset} onRematch={handleRematch}
       soundEnabled={soundEnabled} difficulty={difficulty} timerEnabled={timerEnabled} />;
   }
