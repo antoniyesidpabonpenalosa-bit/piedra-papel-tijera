@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getStats, recordRound, recordGameWin, recordTournamentWin, checkAchievements, getAllAchievements, resetStats } from '../src/stats.js';
+import { getStats, recordRound, recordGameWin, recordTournamentWin, recordSurvivalRun, checkAchievements, getAllAchievements, resetStats } from '../src/stats.js';
 
 describe('estadísticas', () => {
   it('empieza en cero', () => {
@@ -78,5 +78,34 @@ describe('logros', () => {
     const all = getAllAchievements();
     expect(all.find(a => a.id === 'first_win').unlocked).toBe(true);
     expect(all.find(a => a.id === 'wins_50').unlocked).toBe(false);
+  });
+
+  it('logro de supervivencia se desbloquea al alcanzar el récord', () => {
+    recordSurvivalRun(10);
+    const unlocked = checkAchievements();
+    expect(unlocked.map(a => a.id)).toContain('survival_10');
+  });
+});
+
+describe('récord de supervivencia', () => {
+  it('empieza en cero', () => {
+    expect(getStats().bestSurvival).toBe(0);
+  });
+
+  it('guarda una nueva racha como récord', () => {
+    const s = recordSurvivalRun(7);
+    expect(s.bestSurvival).toBe(7);
+  });
+
+  it('no baja el récord si la nueva racha es menor', () => {
+    recordSurvivalRun(15);
+    const s = recordSurvivalRun(4);
+    expect(s.bestSurvival).toBe(15);
+  });
+
+  it('actualiza el récord si la nueva racha lo supera', () => {
+    recordSurvivalRun(5);
+    const s = recordSurvivalRun(9);
+    expect(s.bestSurvival).toBe(9);
   });
 });
