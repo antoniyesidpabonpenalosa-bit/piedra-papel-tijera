@@ -34,14 +34,12 @@ const CSS = `
   @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
   @keyframes fall { to{transform:translateY(110vh) rotate(360deg);opacity:0} }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
-  @keyframes glow { 0%,100%{box-shadow:0 0 20px rgba(255,215,0,.5)} 50%{box-shadow:0 0 40px rgba(255,215,0,.9)} }
+  @keyframes glow { 0%,100%{box-shadow:0 0 8px rgba(255,215,0,.35)} 50%{box-shadow:0 0 16px rgba(255,215,0,.5)} }
   @keyframes slideIn { from{transform:scale(0) rotate(-180deg);opacity:0} to{transform:scale(1) rotate(0);opacity:1} }
   @keyframes fadeIn { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
   @keyframes bounceIn { 0%{transform:scale(0)} 60%{transform:scale(1.12)} 100%{transform:scale(1)} }
   @keyframes countPop { 0%{transform:scale(2.4);opacity:0} 35%{transform:scale(1);opacity:1} 100%{transform:scale(.6);opacity:0} }
   @keyframes scanline { 0%{background-position:0 0} 100%{background-position:0 100%} }
-  @keyframes borderGlow { 0%,100%{border-color:rgba(102,126,234,.6)} 50%{border-color:rgba(240,147,251,.6)} }
-  @keyframes neonFlicker { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.6} 94%{opacity:1} 96%{opacity:.7} 97%{opacity:1} }
   @keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:translateY(0);opacity:1} }
   @keyframes barFill { from{width:0} }
   @keyframes achievePop { 0%{transform:scale(0) rotate(-10deg);opacity:0} 60%{transform:scale(1.15) rotate(3deg)} 100%{transform:scale(1) rotate(0);opacity:1} }
@@ -63,7 +61,7 @@ const CSS = `
 const BG_STYLE = {
   minHeight: '100vh',
   background: 'linear-gradient(180deg, #0a0a1a 0%, #1a1a3e 40%, #0d0d2b 100%)',
-  fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+  fontFamily: "'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
   position: 'relative',
 };
 
@@ -71,8 +69,7 @@ const CARD_STYLE = {
   background: 'rgba(15,15,35,.95)',
   borderRadius: 20,
   border: '2px solid rgba(102,126,234,.3)',
-  boxShadow: '0 0 30px rgba(102,126,234,.15), 0 20px 60px rgba(0,0,0,.6)',
-  animation: 'borderGlow 4s ease-in-out infinite',
+  boxShadow: '0 20px 60px rgba(0,0,0,.6)',
 };
 
 // ── Particles ────────────────────────────────────────────────────────────────
@@ -171,7 +168,7 @@ function CountdownOverlay({ count }) {
     }}>
       <div key={count} style={{
         fontSize: 160, fontWeight: 900, color: '#ffd700',
-        textShadow: '0 0 60px #ffd700, 0 0 120px rgba(255,215,0,.4), 4px 4px 0 #000',
+        textShadow: '0 0 25px rgba(255,215,0,.6), 4px 4px 0 #000',
         animation: 'countPop .7s ease-out',
       }}>{count}</div>
     </div>
@@ -224,7 +221,7 @@ function TimerBar({ timeLeft, maxTime, enabled }) {
       <div style={{
         height: '100%', width: `${pct}%`, background: color, borderRadius: 4,
         transition: 'width 1s linear, background .3s',
-        boxShadow: `0 0 10px ${color}`,
+        boxShadow: `0 0 4px ${color}`,
         animation: pct <= 25 ? 'timerPulse .5s infinite' : 'none',
       }} />
     </div>
@@ -247,7 +244,7 @@ function GradBtn({ onClick, gradient = 'linear-gradient(135deg,#667eea,#764ba2)'
         color: 'white', fontSize: 16, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
         boxShadow: hov && !disabled
-          ? `0 14px 38px ${shadow}, 0 0 20px ${shadow}`
+          ? `0 14px 38px ${shadow}`
           : `0 8px 25px ${shadow}`,
         transform: hov && !disabled ? 'translateY(-3px) scale(1.02)' : 'scale(1)',
         transition: 'all .25s', opacity: disabled ? .5 : 1,
@@ -291,9 +288,9 @@ function StatsScreen({ onBack }) {
         {/* Win rate bar */}
         <div style={{ margin: '20px 0', textAlign: 'center' }}>
           <div style={{ color: '#888', fontSize: 12, marginBottom: 8, letterSpacing: 2 }}>TASA DE VICTORIA</div>
-          <div style={{ fontSize: 48, fontWeight: 900, color: '#2af598', textShadow: '0 0 20px rgba(42,245,152,.4)' }}>{winRate}%</div>
+          <div style={{ fontSize: 48, fontWeight: 900, color: '#2af598', textShadow: '0 0 8px rgba(42,245,152,.35)' }}>{winRate}%</div>
           <div style={{ width: '100%', height: 10, background: 'rgba(255,255,255,.08)', borderRadius: 5, marginTop: 10, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${winRate}%`, background: 'linear-gradient(90deg, #2af598, #009efd)', borderRadius: 5, animation: 'barFill .8s ease-out', boxShadow: '0 0 10px rgba(42,245,152,.5)' }} />
+            <div style={{ height: '100%', width: `${winRate}%`, background: 'linear-gradient(90deg, #2af598, #009efd)', borderRadius: 5, animation: 'barFill .8s ease-out', boxShadow: '0 0 4px rgba(42,245,152,.4)' }} />
           </div>
         </div>
 
@@ -305,7 +302,7 @@ function StatsScreen({ onBack }) {
               border: `1px solid ${s.color}33`,
             }}>
               <div style={{ fontSize: 22, marginBottom: 4 }}>{s.emoji}</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: s.color, textShadow: `0 0 10px ${s.color}44` }}>{s.value}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: s.color, textShadow: `0 0 4px ${s.color}33` }}>{s.value}</div>
               <div style={{ fontSize: 10, color: '#777', marginTop: 4 }}>{s.label}</div>
             </div>
           ))}
@@ -408,7 +405,7 @@ function MissionsScreen({ onBack }) {
                   <div style={{
                     height: '100%', width: `${pct}%`, borderRadius: 3,
                     background: m.completed ? '#2af598' : 'linear-gradient(90deg, #667eea, #009efd)',
-                    boxShadow: m.completed ? '0 0 8px rgba(42,245,152,.5)' : 'none',
+                    boxShadow: m.completed ? '0 0 4px rgba(42,245,152,.4)' : 'none',
                     transition: 'width .4s',
                   }} />
                 </div>
@@ -561,7 +558,7 @@ function MenuScreen({ onSelect, onEditRules, onStats, onMissions, onHelp, rulese
           backgroundSize: '200% 200%',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           fontSize: 34, fontWeight: 900, marginBottom: 6,
-          animation: 'float 3s ease-in-out infinite, neonFlicker 4s infinite',
+          animation: 'float 3s ease-in-out infinite',
           letterSpacing: -1,
         }}>
           ⚔️ PIEDRA PAPEL TIJERA
@@ -884,7 +881,7 @@ function ScoreCard({ title, emoji, score, color, highlight, hasChosen }) {
       background: color, borderRadius: 12, padding: '12px 8px', textAlign: 'center',
       border: highlight ? '2px solid #ffd700' : '2px solid rgba(255,255,255,.1)',
       animation: highlight ? 'glow 2s infinite' : 'none', flex: 1,
-      boxShadow: highlight ? '0 0 20px rgba(255,215,0,.3)' : 'none',
+      boxShadow: highlight ? '0 0 8px rgba(255,215,0,.25)' : 'none',
     }}>
       <div style={{ color: 'rgba(255,255,255,.8)', fontSize: 11, marginBottom: 4, fontWeight: 600 }}>
         {title} {emoji} {hasChosen ? '✓' : ''}
@@ -907,7 +904,7 @@ function ChoiceButton({ ruleset, id, disabled, onClick }) {
         borderRadius: 16, color: 'white', fontSize: 13, fontWeight: 700,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .35 : 1,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-        boxShadow: (hov && !disabled) ? `0 12px 36px ${st.s}, 0 0 20px ${st.s}` : `0 4px 16px ${st.s}`,
+        boxShadow: (hov && !disabled) ? `0 12px 36px ${st.s}` : `0 4px 16px ${st.s}`,
         transform: (hov && !disabled) ? 'translateY(-4px) scale(1.05)' : 'scale(1)',
         transition: 'all .2s',
       }}
@@ -1218,7 +1215,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
 
       {showResults && mode === 'multi' && (
         <Overlay>
-          <div style={{ textAlign: 'center', color: resultColor, fontSize: 28, fontWeight: 700, marginBottom: 28, textShadow: `0 0 30px ${resultColor}` }}>{result}</div>
+          <div style={{ textAlign: 'center', color: resultColor, fontSize: 28, fontWeight: 700, marginBottom: 28, textShadow: `0 0 10px ${resultColor}` }}>{result}</div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
             {players.map((p, i) => (
               <div key={p} style={{
@@ -1254,7 +1251,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
           <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
             <ScoreCard title={players[0]} emoji={av(players[0])} score={playerScores[players[0]] || 0} color={PLAYER_COLORS[0]} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 36 }}>
-              <span style={{ background: 'linear-gradient(135deg,#f093fb,#f5576c)', borderRadius: 8, padding: '5px 8px', color: 'white', fontWeight: 700, fontSize: 13, boxShadow: '0 0 15px rgba(240,147,251,.3)' }}>VS</span>
+              <span style={{ background: 'linear-gradient(135deg,#f093fb,#f5576c)', borderRadius: 8, padding: '5px 8px', color: 'white', fontWeight: 700, fontSize: 13, boxShadow: 'none' }}>VS</span>
             </div>
             <ScoreCard title="CPU" emoji="🤖" score={cpuScore} color="linear-gradient(135deg,#f093fb,#f5576c)" />
           </div>
@@ -1331,11 +1328,11 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
             display: 'flex', justifyContent: 'space-around', alignItems: 'center',
             border: '2px solid rgba(255,215,0,.2)', animation: 'shake .4s',
           }}>
-            <div style={{ fontSize: 64, animation: 'slideIn .5s ease-out', filter: 'drop-shadow(0 0 12px rgba(102,126,234,.8))' }}>
+            <div style={{ fontSize: 64, animation: 'slideIn .5s ease-out', filter: 'drop-shadow(0 0 6px rgba(102,126,234,.6))' }}>
               {emojiOf(ruleset, playerChoice)}
             </div>
             <Zap size={32} color="#ffd700" style={{ animation: 'pulse .5s infinite' }} />
-            <div style={{ fontSize: 64, animation: cpuChoice ? 'slideIn .5s ease-out' : 'none', filter: 'drop-shadow(0 0 12px rgba(245,87,108,.8))' }}>
+            <div style={{ fontSize: 64, animation: cpuChoice ? 'slideIn .5s ease-out' : 'none', filter: 'drop-shadow(0 0 6px rgba(245,87,108,.6))' }}>
               {cpuChoice ? emojiOf(ruleset, cpuChoice) : '❓'}
             </div>
           </div>
@@ -1350,7 +1347,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
         }}>
           <div style={{
             color: resultColor, fontSize: gameOver ? 22 : 16, fontWeight: 700,
-            textShadow: `0 0 20px ${resultColor}`, animation: gameOver ? 'pulse 1s infinite' : 'none',
+            textShadow: `0 0 8px ${resultColor}`, animation: gameOver ? 'pulse 1s infinite' : 'none',
           }}>{result}</div>
         </div>
 
@@ -1364,7 +1361,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
                 border: goal === g ? '2px solid #ffd700' : '2px solid rgba(255,255,255,.1)',
                 borderRadius: 10, color: goal === g ? '#000' : '#ccc', fontSize: 20, fontWeight: 700,
                 cursor: 'pointer', transition: 'all .2s',
-                boxShadow: goal === g ? '0 0 15px rgba(255,215,0,.4)' : 'none',
+                boxShadow: goal === g ? '0 0 6px rgba(255,215,0,.3)' : 'none',
               }}>{g}</button>
             ))}
           </div>
@@ -1375,13 +1372,13 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
             <button onClick={() => { playClick(); onRematch(); }} style={{
               background: 'linear-gradient(135deg,#2af598,#009efd)', border: 'none', borderRadius: 12,
               padding: '12px 28px', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 0 20px rgba(42,245,152,.3)',
+              display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 0 8px rgba(42,245,152,.25)',
             }}><RotateCcw size={18} />Revancha</button>
           )}
           <button onClick={() => { playClick(); onReset(); }} style={{
             background: 'linear-gradient(135deg,#f5576c,#f093fb)', border: 'none', borderRadius: 12,
             padding: '12px 28px', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 0 20px rgba(245,87,108,.3)',
+            display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 0 8px rgba(245,87,108,.25)',
           }}>{gameOver ? '🏠 Menú' : <><RotateCcw size={18} />Cambiar Modo</>}</button>
         </div>
       </div>
@@ -1541,7 +1538,7 @@ function MatchCard({ match, matchNum, onPlay, isFinal }) {
           background: isFinal ? 'linear-gradient(135deg,#ffd700,#ff8c00)' : 'linear-gradient(135deg,#667eea,#764ba2)',
           border: 'none', borderRadius: 8, padding: '7px 14px', color: isFinal ? '#000' : 'white',
           fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-          boxShadow: isFinal ? '0 0 12px rgba(255,215,0,.3)' : '0 0 12px rgba(102,126,234,.3)',
+          boxShadow: isFinal ? '0 0 5px rgba(255,215,0,.25)' : '0 0 5px rgba(102,126,234,.25)',
         }}>▶ Jugar</button>
       )}
     </div>
@@ -1636,7 +1633,7 @@ function TournamentMatch({ players, matchKey, goal, ruleset, avatarMap = {}, onM
 
       {showResults && (
         <Overlay>
-          <div style={{ textAlign: 'center', color: resultColor, fontSize: 26, fontWeight: 700, marginBottom: 24, textShadow: `0 0 25px ${resultColor}` }}>{result}</div>
+          <div style={{ textAlign: 'center', color: resultColor, fontSize: 26, fontWeight: 700, marginBottom: 24, textShadow: `0 0 10px ${resultColor}` }}>{result}</div>
           <div style={{ display: 'flex', gap: 18, justifyContent: 'center' }}>
             {players.map((p, i) => (
               <div key={p} style={{
