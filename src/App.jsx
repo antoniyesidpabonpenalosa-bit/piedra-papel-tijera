@@ -10,6 +10,8 @@ import {
 import { getStats, recordRound, recordGameWin, recordGameLoss, recordTournamentWin, checkAchievements, getAllAchievements, resetStats } from './stats.js';
 import { expertChoose, recordPlayerMove, resetBrain, brainStats } from './brain.js';
 import { getDailyMissions, missionEvent, getTotalCompleted, getAvatars } from './missions.js';
+import { POWERUPS, getPowerup, rollNextPowerupRound, maybeSpawnPowerup } from './powerups.js';
+import { cpuLine } from './trashtalk.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -993,6 +995,11 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
   const [particles, burstParticles] = useParticles();
   const [count, runCountdown] = useCountdown();
   const [achievement, showAchievement, dismissAchievement] = useAchievementToast();
+  const [pendingPowerup, setPendingPowerup] = useState(null);
+  const [activePowerup, setActivePowerup] = useState(null);
+  const [nextPowerupRound, setNextPowerupRound] = useState(() => rollNextPowerupRound(0));
+  const [peekChoice, setPeekChoice] = useState(null);
+  const [cpuSpeech, setCpuSpeech] = useState(null);
 
   const TIMER_SECONDS = 10;
   const currentPlayer = players[currentPlayerIndex];
@@ -1017,6 +1024,25 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
     return () => timer.stop();
   }, [turnPhase, gameOver, showBattle, waitingForChoices, showResults, count, timerEnabled, mode]);
 
+  function computeCpuChoice(pName) {
+    return difficulty === 'easy'
+      ? ids(ruleset)[Math.floor(Math.random() * ids(ruleset).length)]
+      : difficulty === 'hard'
+        ? cpuChooseHard(ruleset, history[pName], roundsPlayed)
+        : difficulty === 'expert'
+          ? expertChoose(ruleset)
+          : cpuChoose(ruleset, history[pName], roundsPlayed);
+  }
+
+  function activatePowerup() {
+    if (!pendingPowerup || activePowerup) return;
+    playClick();
+    const p = pendingPowerup;
+    setActivePowerup(p.id);
+    setPendingPowerup(null);
+    if (p.id === 'peek') setPeekChoice(computeCpuChoice(players[0]));
+  }
+
   function playVsCPU(choice) {
     if (gameOver || showBattle) return;
     timer.stop();
@@ -1025,21 +1051,18 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
     setPlayerChoice(choice);
     setShowBattle(true);
     setCpuChoice(null);
+    setCpuSpeech(null);
+    const usedPowerup = activePowerup;
 
     runCountdown(() => {
-      const cpu = difficulty === 'easy'
-        ? ids(ruleset)[Math.floor(Math.random() * ids(ruleset).length)]
-        : difficulty === 'hard'
-          ? cpuChooseHard(ruleset, history[pName], roundsPlayed)
-          : difficulty === 'expert'
-            ? expertChoose(ruleset)
-            : cpuChoose(ruleset, history[pName], roundsPlayed);
+      const cpu = (usedPowerup === 'peek' && peekChoice) ? peekChoice : computeCpuChoice(pName);
       setCpuChoice(cpu);
       // La IA experta aprende del jugador DESPUÉS de haber elegido (sin trampa)
       recordPlayerMove(choice);
       const newHistory = { ...history, [pName]: { ...history[pName], [choice]: (history[pName][choice] || 0) + 1 } };
       setHistory(newHistory);
-      setRoundsPlayed(r => r + 1);
+      const newRoundsPlayed = roundsPlayed + 1;
+      setRoundsPlayed(newRoundsPlayed);
 
       const winner = determineWinner(ruleset, choice, cpu);
       let text, color;
@@ -1054,26 +1077,38 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
         if (soundEnabled) playTie();
         recordRound('tie', choice);
         completedMissions.push(...missionEvent('round_tie'));
+        setCpuSpeech(cpuLine('tie', difficulty));
       } else if (winner === 'p1') {
-        text = '¡Ganaste! 🏆'; color = '#00ff88'; newPScore++;
+        const pts = usedPowerup === 'double' ? 2 : 1;
+        newPScore += pts;
+        if (usedPowerup === 'steal') newCPUScore = Math.max(0, newCPUScore - 1);
+        text = usedPowerup === 'double' ? '¡Ganaste x2! ⚡🏆' : '¡Ganaste! 🏆'; color = '#00ff88';
         if (soundEnabled) playWin(); vibrate(60); burstParticles(true);
         const st = recordRound('win', choice);
         completedMissions.push(...missionEvent('round_win'));
         completedMissions.push(...missionEvent('streak', st.streak));
         if (difficulty === 'hard' || difficulty === 'expert') completedMissions.push(...missionEvent('hard_win'));
+        setCpuSpeech(cpuLine('cpu_loss', difficulty));
         if (newPScore >= goal) {
           text = `🎉 ¡${pName} GANÓ! 🎉`; setGameOver(true);
           if (soundEnabled) playVictory(); vibrate([80, 40, 80, 40, 160]);
           recordGameWin();
           completedMissions.push(...missionEvent('game_win'));
+          setCpuSpeech(cpuLine('player_game_win', difficulty));
         }
+      } else if (usedPowerup === 'shield') {
+        text = '🛡️ ¡El escudo te salvó!'; color = '#2af598';
+        if (soundEnabled) playTie(); burstParticles(true);
+        setCpuSpeech(cpuLine('cpu_win', difficulty));
       } else {
         text = 'CPU ganó 💀'; color = '#ff4444'; newCPUScore++;
         if (soundEnabled) playLose(); vibrate([40, 40, 40]); burstParticles(false);
         recordRound('loss', choice);
+        setCpuSpeech(cpuLine('cpu_win', difficulty));
         if (newCPUScore >= goal) {
           text = '💀 CPU GANÓ 💀'; setGameOver(true);
           recordGameLoss();
+          setCpuSpeech(cpuLine('cpu_game_win', difficulty));
         }
       }
 
@@ -1087,6 +1122,15 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
       setPlayerScores({ ...playerScores, [pName]: newPScore });
       setCpuScore(newCPUScore);
       setResult(text); setResultColor(color);
+      setActivePowerup(null);
+      setPeekChoice(null);
+
+      const spawned = maybeSpawnPowerup(newRoundsPlayed, nextPowerupRound);
+      if (spawned) {
+        setPendingPowerup(spawned);
+        setNextPowerupRound(rollNextPowerupRound(newRoundsPlayed));
+      }
+
       setTimeout(() => { setShowBattle(false); setButtonOrder(shuffle(ids(ruleset))); }, 1400);
     }, soundEnabled);
   }
@@ -1216,6 +1260,14 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
           </div>
         )}
 
+        {mode === 'cpu' && cpuSpeech && !showBattle && (
+          <div style={{
+            background: 'rgba(240,147,251,.08)', border: '1px solid rgba(240,147,251,.25)',
+            borderRadius: 12, padding: '10px 14px', marginBottom: 16, color: '#f093fb',
+            fontSize: 13, fontStyle: 'italic', textAlign: 'center', animation: 'fadeIn .3s',
+          }}>🤖 "{cpuSpeech}"</div>
+        )}
+
         {mode === 'multi' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 18 }}>
             {players.map((p, i) => (
@@ -1244,6 +1296,34 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
         </div>
 
         <TimerBar timeLeft={timer.timeLeft} maxTime={TIMER_SECONDS} enabled={timerEnabled && !isDisabled && !count} />
+
+        {mode === 'cpu' && pendingPowerup && !gameOver && !showBattle && (
+          <button onClick={activatePowerup} style={{
+            width: '100%', marginBottom: 16, padding: '14px 16px', cursor: 'pointer',
+            background: `linear-gradient(135deg, ${pendingPowerup.color}33, ${pendingPowerup.color}11)`,
+            border: `2px solid ${pendingPowerup.color}`, borderRadius: 14,
+            display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+            animation: 'glow 1.5s infinite',
+          }}>
+            <span style={{ fontSize: 32 }}>{pendingPowerup.emoji}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: pendingPowerup.color, fontWeight: 800, fontSize: 14 }}>¡Power-up disponible! {pendingPowerup.name}</div>
+              <div style={{ color: '#aaa', fontSize: 12 }}>{pendingPowerup.desc}</div>
+            </div>
+            <span style={{ color: pendingPowerup.color, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>USAR ▶</span>
+          </button>
+        )}
+
+        {mode === 'cpu' && activePowerup && !showBattle && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 14,
+            background: 'rgba(255,255,255,.05)', border: `1px solid ${getPowerup(activePowerup)?.color}66`,
+            borderRadius: 10, padding: '6px 12px', fontSize: 12, color: getPowerup(activePowerup)?.color, fontWeight: 700,
+          }}>
+            {getPowerup(activePowerup)?.emoji} {getPowerup(activePowerup)?.name} activo
+            {activePowerup === 'peek' && peekChoice && <span style={{ marginLeft: 4 }}>→ CPU jugará {emojiOf(ruleset, peekChoice)}</span>}
+          </div>
+        )}
 
         {showBattle && mode === 'cpu' && (
           <div style={{
