@@ -7,10 +7,10 @@ import {
   ids, emojiOf, nameOf, styleOf, emptyCounts,
   determineWinner, winningChoice, cpuChoose,
 } from './ruleset.js';
-import { getStats, recordRound, recordGameWin, recordGameLoss, recordTournamentWin, checkAchievements, getAllAchievements, resetStats } from './stats.js';
+import { getStats, recordRound, recordGameWin, recordGameLoss, recordTournamentWin, recordSurvivalRun, checkAchievements, getAllAchievements, resetStats } from './stats.js';
 import { expertChoose, recordPlayerMove, resetBrain, brainStats } from './brain.js';
 import { getDailyMissions, missionEvent, getTotalCompleted, getAvatars } from './missions.js';
-import { POWERUPS, getPowerup, rollNextPowerupRound, maybeSpawnPowerup } from './powerups.js';
+import { POWERUPS, SURVIVAL_POWERUPS, getPowerup, rollNextPowerupRound, maybeSpawnPowerup } from './powerups.js';
 import { cpuLine } from './trashtalk.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -273,6 +273,7 @@ function StatsScreen({ onBack }) {
     { label: 'Mejor Racha', value: stats.bestStreak, emoji: '🔥', color: '#ff8c00' },
     { label: 'Rondas', value: stats.roundsPlayed, emoji: '🎯', color: '#667eea' },
     { label: 'Torneos', value: stats.tournamentWins, emoji: '🥇', color: '#f093fb' },
+    { label: 'Récord Supervivencia', value: stats.bestSurvival || 0, emoji: '🧠', color: '#c084fc' },
   ];
 
   return (
@@ -470,6 +471,7 @@ function HelpScreen({ ruleset, onBack }) {
           { emoji: '🏆', title: 'Torneo', text: '4 jugadores, bracket eliminatorio: 2 semifinales y una final. El primero a 3 puntos avanza.' },
           { emoji: '🎯', title: 'Misiones diarias', text: 'Cada día hay 3 misiones nuevas. Complétalas para desbloquear avatares.' },
           { emoji: '⏱️', title: 'Contrarreloj', text: 'Actívalo en el menú: tendrás 10 segundos por turno. Si no eliges, se juega al azar.' },
+          { emoji: '🧠', title: 'Supervivencia', text: 'Juega contra la IA Experta sin meta de puntos: cada ronda ganada suma a tu racha, y el primer fallo termina la partida (salvo que actives el power-up Escudo). Tu mejor racha queda guardada como récord.' },
           { emoji: '⚙️', title: 'Personaliza', text: 'Edita las reglas para crear tus propios elementos (3 a 7), cambia el tema visual (Neón/8-bit) y activa o silencia el sonido.' },
         ].map(s => (
           <div key={s.title} style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
@@ -605,6 +607,15 @@ function MenuScreen({ onSelect, onEditRules, onStats, onMissions, onHelp, rulese
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 17 }}>VS CPU</div>
               <div style={{ fontSize: 12, opacity: .7, fontWeight: 400 }}>Computadora inteligente · {DIFFICULTY_LABELS[difficulty]}</div>
+            </div>
+          </GradBtn>
+
+          <GradBtn onClick={() => { playClick(); onSelect('survival', 1); }}
+            gradient="linear-gradient(135deg,#c084fc,#7c3aed)" shadow="rgba(192,132,252,.4)">
+            <span style={{ fontSize: 26 }}>🧠</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 17 }}>SUPERVIVENCIA</div>
+              <div style={{ fontSize: 12, opacity: .7, fontWeight: 400 }}>Vs la IA Experta · Sin límite · Un fallo y se acabó</div>
             </div>
           </GradBtn>
 
@@ -815,7 +826,7 @@ const arrowStyle = (disabled) => ({
 // ── SCREEN: Setup ───────────────────────────────────────────────────────────
 
 function SetupScreen({ mode, numPlayers, onStart, onBack }) {
-  const count = mode === 'cpu' ? 1 : numPlayers;
+  const count = (mode === 'cpu' || mode === 'survival') ? 1 : numPlayers;
   const [names, setNames] = useState(
     Array.from({ length: count }, (_, i) => `Jugador ${i + 1}`)
   );
@@ -839,7 +850,7 @@ function SetupScreen({ mode, numPlayers, onStart, onBack }) {
         {names.map((name, i) => (
           <div key={i} style={{ marginBottom: 14, animation: `slideUp .3s ease-out ${i * .1}s both` }}>
             <label style={{ color: PLAYER_SOLIDS[i % 4], fontSize: 11, fontWeight: 700, letterSpacing: 1, display: 'block', marginBottom: 6 }}>
-              {mode === 'cpu' && i === 0 ? 'TU NOMBRE' : `JUGADOR ${i + 1}`}
+              {(mode === 'cpu' || mode === 'survival') && i === 0 ? 'TU NOMBRE' : `JUGADOR ${i + 1}`}
             </label>
             <input value={name} maxLength={16} onChange={e => setName(i, e.target.value)} style={{
               width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,.05)',
@@ -1674,6 +1685,254 @@ function TournamentMatch({ players, matchKey, goal, ruleset, avatarMap = {}, onM
   );
 }
 
+// ── SCREEN: Survival (vs IA Experta, sin límite) ────────────────────────────
+
+function SurvivalScreen({ playerName, avatar, ruleset, onReset, onRematch, soundEnabled, timerEnabled }) {
+  const [streak, setStreak] = useState(0);
+  const [record, setRecord] = useState(() => getStats().bestSurvival || 0);
+  const [cpuChoice, setCpuChoice] = useState(null);
+  const [playerChoice, setPlayerChoice] = useState(null);
+  const [result, setResult] = useState('Sobrevive el mayor número de rondas posible 🧠');
+  const [resultColor, setResultColor] = useState('#c084fc');
+  const [gameOver, setGameOver] = useState(false);
+  const [isNewRecord, setIsNewRecord] = useState(false);
+  const [showBattle, setShowBattle] = useState(false);
+  const [buttonOrder, setButtonOrder] = useState(() => shuffle(ids(ruleset)));
+  const [particles, burstParticles] = useParticles();
+  const [count, runCountdown] = useCountdown();
+  const [achievement, showAchievement, dismissAchievement] = useAchievementToast();
+  const [pendingPowerup, setPendingPowerup] = useState(null);
+  const [activePowerup, setActivePowerup] = useState(null);
+  const [nextPowerupRound, setNextPowerupRound] = useState(() => rollNextPowerupRound(0));
+  const [peekChoice, setPeekChoice] = useState(null);
+  const [cpuSpeech, setCpuSpeech] = useState(null);
+
+  const TIMER_SECONDS = 10;
+
+  const handleTimerExpire = useCallback(() => {
+    const randomChoice = ids(ruleset)[Math.floor(Math.random() * ids(ruleset).length)];
+    playRound(randomChoice);
+  }, [ruleset, gameOver, showBattle, streak, activePowerup, peekChoice]);
+
+  const timer = useTurnTimer(timerEnabled, TIMER_SECONDS, handleTimerExpire);
+
+  useEffect(() => {
+    if (timerEnabled && !gameOver && !showBattle && !count) timer.start();
+    return () => timer.stop();
+  }, [gameOver, showBattle, count, timerEnabled]);
+
+  function activatePowerup() {
+    if (!pendingPowerup || activePowerup) return;
+    playClick();
+    const p = pendingPowerup;
+    setActivePowerup(p.id);
+    setPendingPowerup(null);
+    if (p.id === 'peek') setPeekChoice(expertChoose(ruleset));
+  }
+
+  function endRun(finalStreak) {
+    const st = recordSurvivalRun(finalStreak);
+    setIsNewRecord(finalStreak > record && finalStreak > 0);
+    setRecord(st.bestSurvival || 0);
+    setGameOver(true);
+    const newAch = checkAchievements();
+    if (newAch.length) showAchievement(newAch.map(a => ({ ...a, toastType: '🏆 LOGRO DESBLOQUEADO' })));
+  }
+
+  function playRound(choice) {
+    if (gameOver || showBattle) return;
+    timer.stop();
+    if (soundEnabled) playClick();
+    setPlayerChoice(choice);
+    setShowBattle(true);
+    setCpuChoice(null);
+    setCpuSpeech(null);
+    const usedPowerup = activePowerup;
+
+    runCountdown(() => {
+      const cpu = (usedPowerup === 'peek' && peekChoice) ? peekChoice : expertChoose(ruleset);
+      setCpuChoice(cpu);
+      recordPlayerMove(choice);
+
+      const winner = determineWinner(ruleset, choice, cpu);
+      let text, color;
+      let newStreak = streak;
+      let ended = false;
+
+      const completedMissions = [];
+      completedMissions.push(...missionEvent('round_played'));
+
+      if (winner === 'tie') {
+        text = `¡Empate! Sigues vivo · Racha: ${streak} 🤝`; color = '#ffcc00';
+        if (soundEnabled) playTie();
+        recordRound('tie', choice);
+        completedMissions.push(...missionEvent('round_tie'));
+        setCpuSpeech(cpuLine('tie', 'expert'));
+      } else if (winner === 'p1') {
+        newStreak = streak + 1;
+        text = `¡Sobreviviste! Racha: ${newStreak} 🔥`; color = '#00ff88';
+        if (soundEnabled) playWin(); vibrate(60); burstParticles(true);
+        const st = recordRound('win', choice);
+        completedMissions.push(...missionEvent('round_win'));
+        completedMissions.push(...missionEvent('streak', st.streak));
+        completedMissions.push(...missionEvent('hard_win'));
+        setCpuSpeech(cpuLine('cpu_loss', 'expert'));
+      } else if (usedPowerup === 'shield') {
+        text = `🛡️ ¡El escudo te salvó! Racha: ${streak}`; color = '#2af598';
+        if (soundEnabled) playTie(); burstParticles(true);
+        setCpuSpeech(cpuLine('cpu_win', 'expert'));
+      } else {
+        text = `💀 Fallaste. Sobreviviste ${streak} ronda${streak === 1 ? '' : 's'}`; color = '#ff4444';
+        if (soundEnabled) playLose(); vibrate([40, 40, 40]); burstParticles(false);
+        recordRound('loss', choice);
+        setCpuSpeech(cpuLine('cpu_win', 'expert'));
+        ended = true;
+      }
+
+      const newAch = checkAchievements();
+      const toasts = [
+        ...newAch,
+        ...completedMissions.map(m => ({ ...m, toastType: '🎯 MISIÓN COMPLETADA' })),
+      ];
+      if (toasts.length) showAchievement(toasts);
+
+      setStreak(newStreak);
+      setResult(text); setResultColor(color);
+      setActivePowerup(null);
+      setPeekChoice(null);
+
+      if (ended) {
+        setTimeout(() => { setShowBattle(false); endRun(newStreak); }, 1400);
+      } else {
+        const spawned = maybeSpawnPowerup(newStreak, nextPowerupRound, SURVIVAL_POWERUPS);
+        if (spawned) {
+          setPendingPowerup(spawned);
+          setNextPowerupRound(rollNextPowerupRound(newStreak));
+        }
+        setTimeout(() => { setShowBattle(false); setButtonOrder(shuffle(ids(ruleset))); }, 1400);
+      }
+    }, soundEnabled);
+  }
+
+  return (
+    <div style={{ ...BG_STYLE, padding: '20px 12px', overflow: 'hidden' }}>
+      <style>{CSS}</style>
+      <Particles particles={particles} />
+      <CountdownOverlay count={count} />
+      <AchievementToast achievement={achievement} onDone={dismissAchievement} />
+
+      {gameOver && (
+        <Overlay>
+          <div style={{ fontSize: 64, marginBottom: 10 }}>{isNewRecord ? '🏆' : '💀'}</div>
+          {isNewRecord && (
+            <div style={{ color: '#ffd700', fontWeight: 800, fontSize: 14, marginBottom: 10, letterSpacing: 1 }}>¡NUEVO RÉCORD!</div>
+          )}
+          <div style={{ color: 'white', fontSize: 22, fontWeight: 700, marginBottom: 6, textAlign: 'center' }}>
+            Sobreviviste {streak} ronda{streak === 1 ? '' : 's'}
+          </div>
+          <div style={{ color: '#888', fontSize: 13, marginBottom: 28 }}>Récord: {record}</div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <GradBtn onClick={() => { playClick(); onRematch(); }} gradient="linear-gradient(135deg,#c084fc,#7c3aed)" shadow="rgba(192,132,252,.4)" style={{ maxWidth: 200 }}>
+              <RotateCcw size={18} /> Reintentar
+            </GradBtn>
+            <GradBtn onClick={() => { playClick(); onReset(); }} gradient="linear-gradient(135deg,#667eea,#764ba2)" shadow="rgba(102,126,234,.4)" style={{ maxWidth: 200 }}>
+              🏠 Menú
+            </GradBtn>
+          </div>
+        </Overlay>
+      )}
+
+      <div style={{ maxWidth: 720, margin: '0 auto', ...CARD_STYLE, padding: '28px 24px', position: 'relative', zIndex: 1, border: '2px solid rgba(192,132,252,.25)' }}>
+        <h1 style={{
+          textAlign: 'center', background: 'linear-gradient(45deg,#c084fc,#7c3aed,#3a86ff)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: 22, fontWeight: 900, marginBottom: 14,
+        }}>🧠 SUPERVIVENCIA</h1>
+
+        <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+          <div style={{
+            flex: 1, textAlign: 'center', padding: '14px 10px', borderRadius: 12,
+            background: 'linear-gradient(135deg,#c084fc,#7c3aed)', border: '2px solid rgba(255,255,255,.15)',
+          }}>
+            <div style={{ color: 'rgba(255,255,255,.8)', fontSize: 11, marginBottom: 4 }}>{avatar} {playerName} · Racha</div>
+            <div style={{ color: 'white', fontSize: 38, fontWeight: 900 }}>{streak}</div>
+          </div>
+          <div style={{
+            flex: 1, textAlign: 'center', padding: '14px 10px', borderRadius: 12,
+            background: 'rgba(255,215,0,.08)', border: '2px solid rgba(255,215,0,.25)',
+          }}>
+            <div style={{ color: '#ffd700', fontSize: 11, marginBottom: 4 }}>🏆 Récord</div>
+            <div style={{ color: '#ffd700', fontSize: 38, fontWeight: 900 }}>{record}</div>
+          </div>
+        </div>
+
+        {cpuSpeech && !showBattle && !gameOver && (
+          <div style={{
+            background: 'rgba(240,147,251,.08)', border: '1px solid rgba(240,147,251,.25)',
+            borderRadius: 12, padding: '10px 14px', marginBottom: 16, color: '#f093fb',
+            fontSize: 13, fontStyle: 'italic', textAlign: 'center', animation: 'fadeIn .3s',
+          }}>🤖 "{cpuSpeech}"</div>
+        )}
+
+        <TimerBar timeLeft={timer.timeLeft} maxTime={TIMER_SECONDS} enabled={timerEnabled && !gameOver && !showBattle && !count} />
+
+        {pendingPowerup && !gameOver && !showBattle && (
+          <button onClick={activatePowerup} style={{
+            width: '100%', marginBottom: 16, padding: '14px 16px', cursor: 'pointer',
+            background: `linear-gradient(135deg, ${pendingPowerup.color}33, ${pendingPowerup.color}11)`,
+            border: `2px solid ${pendingPowerup.color}`, borderRadius: 14,
+            display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+            animation: 'glow 1.5s infinite',
+          }}>
+            <span style={{ fontSize: 32 }}>{pendingPowerup.emoji}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: pendingPowerup.color, fontWeight: 800, fontSize: 14 }}>¡Power-up disponible! {pendingPowerup.name}</div>
+              <div style={{ color: '#aaa', fontSize: 12 }}>{pendingPowerup.desc}</div>
+            </div>
+            <span style={{ color: pendingPowerup.color, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>USAR ▶</span>
+          </button>
+        )}
+
+        {activePowerup && !showBattle && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 14,
+            background: 'rgba(255,255,255,.05)', border: `1px solid ${getPowerup(activePowerup)?.color}66`,
+            borderRadius: 10, padding: '6px 12px', fontSize: 12, color: getPowerup(activePowerup)?.color, fontWeight: 700,
+          }}>
+            {getPowerup(activePowerup)?.emoji} {getPowerup(activePowerup)?.name} activo
+            {activePowerup === 'peek' && peekChoice && <span style={{ marginLeft: 4 }}>→ CPU jugará {emojiOf(ruleset, peekChoice)}</span>}
+          </div>
+        )}
+
+        {showBattle && (
+          <div style={{
+            background: 'rgba(0,0,0,.3)', borderRadius: 16, padding: '22px 14px', marginBottom: 16,
+            display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+            border: '2px solid rgba(192,132,252,.2)', animation: 'shake .4s',
+          }}>
+            <div style={{ fontSize: 64, animation: 'slideIn .5s ease-out', filter: 'drop-shadow(0 0 6px rgba(192,132,252,.6))' }}>
+              {emojiOf(ruleset, playerChoice)}
+            </div>
+            <Zap size={32} color="#c084fc" style={{ animation: 'pulse .5s infinite' }} />
+            <div style={{ fontSize: 64, animation: cpuChoice ? 'slideIn .5s ease-out' : 'none', filter: 'drop-shadow(0 0 6px rgba(245,87,108,.6))' }}>
+              {cpuChoice ? emojiOf(ruleset, cpuChoice) : '❓'}
+            </div>
+          </div>
+        )}
+
+        <ChoiceGrid ruleset={ruleset} disabled={gameOver || showBattle} onChoice={playRound} order={buttonOrder} />
+
+        <div style={{
+          textAlign: 'center', padding: '16px 14px', background: 'rgba(0,0,0,.2)', borderRadius: 14,
+          minHeight: 60, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '1px solid rgba(255,255,255,.06)',
+        }}>
+          <div style={{ color: resultColor, fontSize: 15, fontWeight: 700, textShadow: `0 0 8px ${resultColor}` }}>{result}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ROOT App ────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -1720,7 +1979,7 @@ export default function App() {
   function handleSetupStart(names, avatarChoices = []) {
     setPlayers(names);
     setAvatarMap(Object.fromEntries(names.map((n, i) => [n, avatarChoices[i] || '😀'])));
-    setScreen(mode === 'tournament' ? 'tournament' : 'game');
+    setScreen(mode === 'tournament' ? 'tournament' : mode === 'survival' ? 'survival' : 'game');
   }
   function handleReset() { setScreen('menu'); setMode(null); setPlayers([]); }
   function handleGoalChange(newGoal) { setGoal(newGoal); }
@@ -1748,6 +2007,9 @@ export default function App() {
   } else if (screen === 'tournament') {
     content = <TournamentScreen key={gameInstance} players={players} ruleset={ruleset} avatarMap={avatarMap}
       onReset={handleReset} onRematch={handleRematch} soundEnabled={soundEnabled} timerEnabled={timerEnabled} />;
+  } else if (screen === 'survival') {
+    content = <SurvivalScreen key={gameInstance} playerName={players[0]} avatar={avatarMap[players[0]] || '👤'}
+      ruleset={ruleset} onReset={handleReset} onRematch={handleRematch} soundEnabled={soundEnabled} timerEnabled={timerEnabled} />;
   } else {
     content = <GameScreen key={gameInstance} mode={mode} players={players} goal={goal} ruleset={ruleset} avatarMap={avatarMap}
       onGoalChange={handleGoalChange} onReset={handleReset} onRematch={handleRematch}

@@ -33,6 +33,10 @@ export const POWERUPS = [
   },
 ];
 
+// Subconjunto válido para Supervivencia: no hay puntaje de rival ni meta de
+// puntos, así que "Doble Punto" y "Robo" no aplican.
+export const SURVIVAL_POWERUPS = POWERUPS.filter(p => p.id === 'peek' || p.id === 'shield');
+
 export function getPowerup(id) {
   return POWERUPS.find(p => p.id === id) || null;
 }
@@ -46,8 +50,8 @@ export function rollNextPowerupRound(currentRound) {
   return currentRound + 3 + Math.floor(Math.random() * 3);
 }
 
-export function maybeSpawnPowerup(roundsPlayed, nextEligibleRound) {
+export function maybeSpawnPowerup(roundsPlayed, nextEligibleRound, pool = POWERUPS) {
   if (roundsPlayed < nextEligibleRound) return null;
   if (Math.random() > APPEAR_CHANCE) return null;
-  return POWERUPS[Math.floor(Math.random() * POWERUPS.length)];
+  return pool[Math.floor(Math.random() * pool.length)];
 }

@@ -22,6 +22,7 @@ function blank() {
     bestStreak: 0,
     tournamentWins: 0,
     roundsPlayed: 0,
+    bestSurvival: 0,
     achievements: [],
     choiceCounts: {},
   };
@@ -74,6 +75,15 @@ export function recordTournamentWin() {
   return s;
 }
 
+// Registra el resultado de una corrida de Supervivencia (racha final). Solo
+// actualiza el récord si superó al anterior.
+export function recordSurvivalRun(finalStreak) {
+  const s = getStats();
+  if (finalStreak > (s.bestSurvival || 0)) s.bestSurvival = finalStreak;
+  save(s);
+  return s;
+}
+
 const ACHIEVEMENT_DEFS = [
   { id: 'first_win', name: 'Primera Victoria', emoji: '🌟', desc: 'Gana tu primera ronda', check: s => s.wins >= 1 },
   { id: 'streak_3', name: 'En Racha', emoji: '🔥', desc: 'Gana 3 rondas seguidas', check: s => s.bestStreak >= 3 },
@@ -86,6 +96,9 @@ const ACHIEVEMENT_DEFS = [
   { id: 'tournament_1', name: 'Torneo Ganado', emoji: '🥇', desc: 'Gana un torneo', check: s => s.tournamentWins >= 1 },
   { id: 'tournament_3', name: 'Tricampeón', emoji: '👑', desc: 'Gana 3 torneos', check: s => s.tournamentWins >= 3 },
   { id: 'games_10', name: 'Adicto', emoji: '🎮', desc: 'Juega 10 partidas', check: s => s.totalGames >= 10 },
+  { id: 'survival_10', name: 'Superviviente', emoji: '🏕️', desc: 'Sobrevive 10 rondas seguidas vs la IA Experta', check: s => (s.bestSurvival || 0) >= 10 },
+  { id: 'survival_20', name: 'Indestructible', emoji: '🗿', desc: 'Sobrevive 20 rondas seguidas vs la IA Experta', check: s => (s.bestSurvival || 0) >= 20 },
+  { id: 'survival_35', name: 'Mito Viviente', emoji: '🐉', desc: 'Sobrevive 35 rondas seguidas vs la IA Experta', check: s => (s.bestSurvival || 0) >= 35 },
 ];
 
 export function checkAchievements() {

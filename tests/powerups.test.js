@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { POWERUPS, getPowerup, rollNextPowerupRound, maybeSpawnPowerup } from '../src/powerups.js';
+import { POWERUPS, SURVIVAL_POWERUPS, getPowerup, rollNextPowerupRound, maybeSpawnPowerup } from '../src/powerups.js';
 
 describe('power-ups', () => {
   it('getPowerup encuentra por id', () => {
@@ -33,6 +33,17 @@ describe('power-ups', () => {
     for (let i = 0; i < 200; i++) {
       const p = maybeSpawnPowerup(10, 10);
       if (p) expect(POWERUPS.map(x => x.id)).toContain(p.id);
+    }
+  });
+
+  it('SURVIVAL_POWERUPS solo incluye Espía y Escudo', () => {
+    expect(SURVIVAL_POWERUPS.map(p => p.id).sort()).toEqual(['peek', 'shield']);
+  });
+
+  it('respeta el pool personalizado al generar', () => {
+    for (let i = 0; i < 200; i++) {
+      const p = maybeSpawnPowerup(10, 10, SURVIVAL_POWERUPS);
+      if (p) expect(['peek', 'shield']).toContain(p.id);
     }
   });
 });
