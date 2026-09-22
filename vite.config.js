@@ -2,9 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Base path: en GitHub Pages el sitio vive en /piedra-papel-tijera/.
-// En desarrollo (npm run dev) usamos '/'.
-const base = process.env.NODE_ENV === 'production' ? '/piedra-papel-tijera/' : '/';
+// Base path: por defecto '/', correcto para Vercel/Netlify y para 'npm run dev'.
+// El workflow de GitHub Pages exporta VITE_BASE_PATH=/piedra-papel-tijera/
+// porque ahí el sitio vive en esa subcarpeta.
+const base = process.env.VITE_BASE_PATH || '/';
 
 export default defineConfig({
   base,
