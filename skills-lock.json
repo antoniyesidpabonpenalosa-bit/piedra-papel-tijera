@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "eve": {
+      "source": "vercel/eve",
+      "sourceType": "github",
+      "skillPath": "skills/eve/SKILL.md",
+      "computedHash": "79a1e606ecf33eed33c1f3adc1cc266de391e19aa9237ca37e4f3aa3fba6b228"
+    },
+    "gh-pr-description": {
+      "source": "vercel/eve",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/gh-pr-description/SKILL.md",
+      "computedHash": "432c11fb783cb45b337684ac3e1d483359ad0fd9e148f13cf73ac92fcb300694"
+    },
+    "technical-writing": {
+      "source": "vercel/eve",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/technical-writing/SKILL.md",
+      "computedHash": "7df53a8749eb85f2e8d7363954b3c2762b0f23db344fb7d6d63cad26b2c51fe1"
+    },
+    "test-audit": {
+      "source": "vercel/eve",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/test-audit/SKILL.md",
+      "computedHash": "0cc73961b863a92a0356260a0fbd059371bef0f791f64ad89c9538c7a2d4dc1f"
+    }
+  }
+}

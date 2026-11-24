@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { RotateCcw, Trophy, Zap, Target, Users, Cpu, Volume2, VolumeX, Settings, Plus, Trash2, ChevronUp, ChevronDown, Gamepad2, Sparkles, Timer, BarChart3, Award, X, Clock } from 'lucide-react';
-import { playClick, playWin, playLose, playTie, playVictory, playCountdown, playGo, vibrate } from './sounds.js';
+import { playClick, playWin, playLose, playTie, playVictory, playCountdown, playGo, vibrate, setSoundStyle } from './sounds.js';
+import { makeBurst, prefersReducedMotion, EMPTY_BURST } from './effects.js';
 import {
   DEFAULT_RULESET, RPSLS_RULESET, ELEMENT_STYLES,
   loadRuleset, saveRuleset,
@@ -44,6 +45,24 @@ const CSS = `
   @keyframes barFill { from{width:0} }
   @keyframes achievePop { 0%{transform:scale(0) rotate(-10deg);opacity:0} 60%{transform:scale(1.15) rotate(3deg)} 100%{transform:scale(1) rotate(0);opacity:1} }
   @keyframes timerPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+  @keyframes clashL { 0%{transform:translateX(-90px) scale(.5) rotate(-25deg);opacity:0} 55%{transform:translateX(8px) scale(1.35) rotate(6deg);opacity:1} 75%{transform:translateX(-4px) scale(.95)} 100%{transform:translateX(0) scale(1) rotate(0);opacity:1} }
+  @keyframes clashR { 0%{transform:translateX(90px) scale(.5) rotate(25deg);opacity:0} 55%{transform:translateX(-8px) scale(1.35) rotate(-6deg);opacity:1} 75%{transform:translateX(4px) scale(.95)} 100%{transform:translateX(0) scale(1) rotate(0);opacity:1} }
+  @keyframes fistPump { 0%{transform:translateY(-30px) rotate(-12deg)} 40%{transform:translateY(22px) rotate(8deg)} 100%{transform:translateY(0) rotate(0)} }
+  @keyframes scoreBump { 0%{transform:scale(1)} 35%{transform:scale(1.55);color:#ffd700} 100%{transform:scale(1)} }
+  @keyframes flash { 0%{opacity:0} 15%{opacity:1} 100%{opacity:0} }
+  @keyframes burst {
+    0%{transform:translate(-50%,-50%) translate(0,0) rotate(0) scale(.4);opacity:1}
+    35%{transform:translate(-50%,-50%) translate(calc(var(--dx) * .75),var(--up)) rotate(calc(var(--rot) * .4)) scale(1);opacity:1}
+    100%{transform:translate(-50%,-50%) translate(var(--dx),var(--fall)) rotate(var(--rot)) scale(.9);opacity:0}
+  }
+  .fx-flash { position:fixed; inset:0; z-index:1999; pointer-events:none;
+    box-shadow: inset 0 0 140px 24px var(--c); animation: flash .55s ease-out forwards; }
+  .fx-piece { position:fixed; left:50%; top:42%; z-index:2000; pointer-events:none; opacity:0;
+    animation: burst var(--dur) cubic-bezier(.2,.7,.4,1) forwards; animation-delay: var(--delay); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
 
   /* ── Tema RETRO 8-bit ── */
   .retro * { font-family: 'Press Start 2P', 'Courier New', monospace !important; letter-spacing: 0 !important; }
@@ -56,6 +75,7 @@ const CSS = `
     box-shadow: 4px 4px 0 rgba(0,0,0,.85) !important; font-size: 11px !important; transform: none !important; }
   .retro input { border-radius: 0 !important; border: 3px solid #000 !important; font-size: 12px !important; }
   .retro p, .retro span, .retro label { text-shadow: 1px 1px 0 #000; }
+  .retro .fx-flash { box-shadow: inset 0 0 0 14px var(--c); animation-timing-function: steps(4, end); }
 `;
 
 const BG_STYLE = {
@@ -74,31 +94,36 @@ const CARD_STYLE = {
 
 // ── Particles ────────────────────────────────────────────────────────────────
 
+// `particles` es el resultado de makeBurst: piezas de confeti + destello de pantalla.
 function Particles({ particles }) {
-  return particles.map(p => (
-    <div key={p.id} style={{
-      position: 'fixed', left: `${p.left}%`, top: -30,
-      fontSize: 28, zIndex: 2000, pointerEvents: 'none',
-      animation: `fall 2s ease-in forwards`,
-      animationDelay: `${p.delay}s`,
-    }}>{p.emoji}</div>
-  ));
+  const { pieces, flash } = particles;
+  return (
+    <>
+      {flash && <div key={flash.id} className="fx-flash" style={{ '--c': flash.color }} />}
+      {pieces.map(p => (
+        <div key={p.id} className="fx-piece" style={{
+          '--dx': `${p.dx}px`, '--up': `${p.up}px`, '--fall': `${p.fall}px`, '--rot': `${p.rot}deg`,
+          '--dur': `${p.duration}s`, '--delay': `${p.delay}s`,
+          ...(p.shape === 'rect'
+            ? { width: p.size, height: p.size * 1.6, background: p.color }
+            : { fontSize: p.size, lineHeight: 1 }),
+        }}>{p.emoji}</div>
+      ))}
+    </>
+  );
 }
 
+// burst('win' | 'lose' | 'tie'); true/false se siguen aceptando como ganar/perder.
 function useParticles() {
-  const [particles, setParticles] = useState([]);
-  const burst = useCallback((isWin) => {
-    const emojis = isWin ? ['✨','🎉','⭐','💫','🏆'] : ['💥','💨','😢','💔'];
-    const p = Array.from({ length: 22 }, (_, i) => ({
-      id: Date.now() + i,
-      left: Math.random() * 100,
-      delay: Math.random() * 0.6,
-      emoji: emojis[i % emojis.length],
-    }));
-    setParticles(p);
-    setTimeout(() => setParticles([]), 2500);
+  const [fx, setFx] = useState(EMPTY_BURST);
+  const timer = useRef(null);
+  const burst = useCallback((kind) => {
+    setFx(makeBurst(kind, { reduced: prefersReducedMotion() }));
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setFx(EMPTY_BURST), 2600);
   }, []);
-  return [particles, burst];
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return [fx, burst];
 }
 
 // ── Achievement Toast ────────────────────────────────────────────────────────
@@ -166,11 +191,15 @@ function CountdownOverlay({ count }) {
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,.92)', zIndex: 1500,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <div key={count} style={{
-        fontSize: 160, fontWeight: 900, color: '#ffd700',
-        textShadow: '0 0 25px rgba(255,215,0,.6), 4px 4px 0 #000',
-        animation: 'countPop .7s ease-out',
-      }}>{count}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <span key={`l${count}`} style={{ fontSize: 72, display: 'inline-block', animation: 'fistPump .7s ease-in-out' }}>✊</span>
+        <div key={count} style={{
+          fontSize: 160, fontWeight: 900, color: '#ffd700',
+          textShadow: '0 0 25px rgba(255,215,0,.6), 4px 4px 0 #000',
+          animation: 'countPop .7s ease-out',
+        }}>{count}</div>
+        <span key={`r${count}`} style={{ fontSize: 72, display: 'inline-block', animation: 'fistPump .7s ease-in-out' }}>✊</span>
+      </div>
     </div>
   );
 }
@@ -897,7 +926,10 @@ function ScoreCard({ title, emoji, score, color, highlight, hasChosen }) {
       <div style={{ color: 'rgba(255,255,255,.8)', fontSize: 11, marginBottom: 4, fontWeight: 600 }}>
         {title} {emoji} {hasChosen ? '✓' : ''}
       </div>
-      <div style={{ color: 'white', fontSize: 38, fontWeight: 900, textShadow: '0 2px 8px rgba(0,0,0,.3)' }}>{score}</div>
+      <div key={score} style={{
+        color: 'white', fontSize: 38, fontWeight: 900, textShadow: '0 2px 8px rgba(0,0,0,.3)',
+        animation: score > 0 ? 'scoreBump .45s ease-out' : 'none',
+      }}>{score}</div>
     </div>
   );
 }
@@ -1082,7 +1114,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
 
       if (winner === 'tie') {
         text = '¡Empate! 🤝'; color = '#ffcc00';
-        if (soundEnabled) playTie();
+        if (soundEnabled) playTie(); burstParticles('tie');
         recordRound('tie', choice);
         completedMissions.push(...missionEvent('round_tie'));
         setCpuSpeech(cpuLine('tie', difficulty));
@@ -1106,7 +1138,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
         }
       } else if (usedPowerup === 'shield') {
         text = '🛡️ ¡El escudo te salvó!'; color = '#2af598';
-        if (soundEnabled) playTie(); burstParticles(true);
+        if (soundEnabled) playTie(); burstParticles('tie');
         setCpuSpeech(cpuLine('cpu_win', difficulty));
       } else {
         text = 'CPU ganó 💀'; color = '#ff4444'; newCPUScore++;
@@ -1176,7 +1208,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
 
     if (!winChoice) {
       text = '¡EMPATE! 🤝'; color = '#ffcc00';
-      if (soundEnabled) playTie();
+      if (soundEnabled) playTie(); burstParticles('tie');
     } else {
       const winners = players.filter(p => choices[p] === winChoice);
       if (winners.length === 1) {
@@ -1192,7 +1224,7 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
         burstParticles(true);
       } else {
         text = `¡${winners.join(' y ')} empataron! 🤝`; color = '#ffcc00';
-        if (soundEnabled) playTie();
+        if (soundEnabled) playTie(); burstParticles('tie');
       }
     }
 
@@ -1339,11 +1371,11 @@ function GameScreen({ mode, players, goal, ruleset, avatarMap = {}, onGoalChange
             display: 'flex', justifyContent: 'space-around', alignItems: 'center',
             border: '2px solid rgba(255,215,0,.2)', animation: 'shake .4s',
           }}>
-            <div style={{ fontSize: 64, animation: 'slideIn .5s ease-out', filter: 'drop-shadow(0 0 6px rgba(102,126,234,.6))' }}>
+            <div style={{ fontSize: 64, animation: 'clashL .55s ease-out', filter: 'drop-shadow(0 0 6px rgba(102,126,234,.6))' }}>
               {emojiOf(ruleset, playerChoice)}
             </div>
             <Zap size={32} color="#ffd700" style={{ animation: 'pulse .5s infinite' }} />
-            <div style={{ fontSize: 64, animation: cpuChoice ? 'slideIn .5s ease-out' : 'none', filter: 'drop-shadow(0 0 6px rgba(245,87,108,.6))' }}>
+            <div style={{ fontSize: 64, animation: cpuChoice ? 'clashR .55s ease-out' : 'none', filter: 'drop-shadow(0 0 6px rgba(245,87,108,.6))' }}>
               {cpuChoice ? emojiOf(ruleset, cpuChoice) : '❓'}
             </div>
           </div>
@@ -1613,7 +1645,7 @@ function TournamentMatch({ players, matchKey, goal, ruleset, avatarMap = {}, onM
     const newScores = { ...scores };
     if (w === 'tie') {
       text = '¡Empate! 🤝'; color = '#ffcc00';
-      if (soundEnabled) playTie();
+      if (soundEnabled) playTie(); burstParticles('tie');
     } else {
       rWinner = players[w === 'p1' ? 0 : 1];
       newScores[rWinner]++;
@@ -1764,7 +1796,7 @@ function SurvivalScreen({ playerName, avatar, ruleset, onReset, onRematch, sound
 
       if (winner === 'tie') {
         text = `¡Empate! Sigues vivo · Racha: ${streak} 🤝`; color = '#ffcc00';
-        if (soundEnabled) playTie();
+        if (soundEnabled) playTie(); burstParticles('tie');
         recordRound('tie', choice);
         completedMissions.push(...missionEvent('round_tie'));
         setCpuSpeech(cpuLine('tie', 'expert'));
@@ -1779,7 +1811,7 @@ function SurvivalScreen({ playerName, avatar, ruleset, onReset, onRematch, sound
         setCpuSpeech(cpuLine('cpu_loss', 'expert'));
       } else if (usedPowerup === 'shield') {
         text = `🛡️ ¡El escudo te salvó! Racha: ${streak}`; color = '#2af598';
-        if (soundEnabled) playTie(); burstParticles(true);
+        if (soundEnabled) playTie(); burstParticles('tie');
         setCpuSpeech(cpuLine('cpu_win', 'expert'));
       } else {
         text = `💀 Fallaste. Sobreviviste ${streak} ronda${streak === 1 ? '' : 's'}`; color = '#ff4444';
@@ -1909,11 +1941,11 @@ function SurvivalScreen({ playerName, avatar, ruleset, onReset, onRematch, sound
             display: 'flex', justifyContent: 'space-around', alignItems: 'center',
             border: '2px solid rgba(192,132,252,.2)', animation: 'shake .4s',
           }}>
-            <div style={{ fontSize: 64, animation: 'slideIn .5s ease-out', filter: 'drop-shadow(0 0 6px rgba(192,132,252,.6))' }}>
+            <div style={{ fontSize: 64, animation: 'clashL .55s ease-out', filter: 'drop-shadow(0 0 6px rgba(192,132,252,.6))' }}>
               {emojiOf(ruleset, playerChoice)}
             </div>
             <Zap size={32} color="#c084fc" style={{ animation: 'pulse .5s infinite' }} />
-            <div style={{ fontSize: 64, animation: cpuChoice ? 'slideIn .5s ease-out' : 'none', filter: 'drop-shadow(0 0 6px rgba(245,87,108,.6))' }}>
+            <div style={{ fontSize: 64, animation: cpuChoice ? 'clashR .55s ease-out' : 'none', filter: 'drop-shadow(0 0 6px rgba(245,87,108,.6))' }}>
               {cpuChoice ? emojiOf(ruleset, cpuChoice) : '❓'}
             </div>
           </div>
@@ -1956,6 +1988,8 @@ export default function App() {
   const [difficulty, setDifficulty] = useState(() => {
     try { return localStorage.getItem('ppt-difficulty') || 'normal'; } catch { return 'normal'; }
   });
+
+  useEffect(() => { setSoundStyle(theme); }, [theme]);
 
   function toggleSound() {
     setSoundEnabled(v => { const n = !v; try { localStorage.setItem('ppt-sound', n ? 'on' : 'off'); } catch {} return n; });
